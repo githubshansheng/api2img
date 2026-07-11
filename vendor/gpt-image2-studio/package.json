@@ -1,0 +1,25 @@
+{
+  "name": "gpt-image2-studio",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "本地优先的 AI 图像生成与视觉创作工作台",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "generate": "node generate-image.mjs",
+    "help": "node generate-image.mjs --help",
+    "sync:public-lib": "node scripts/sync-public-lib.mjs",
+    "build:pages": "node scripts/build-cloudflare-pages.mjs",
+    "build:installer": "node scripts/build-windows-installer.mjs",
+    "test": "node --test ./test/*.test.mjs",
+    "test:creation-e2e": "node --test ./test/creation-e2e-regression.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "pptxgenjs": "^4.0.1"
+  }
+}
