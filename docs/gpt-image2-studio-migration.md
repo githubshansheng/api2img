@@ -55,4 +55,4 @@
 | 当前生产源码无假数据关键词 | `rg "mock\|Mock\|MOCK" src server vendor\gpt-image2-studio\server.mjs vendor\gpt-image2-studio\lib vendor\gpt-image2-studio\public` | 无命中 |
 | 当前 BFF 健康检查 | `GET http://127.0.0.1:8787/api/health` | 200 |
 | 参考 Studio 健康检查 | `GET http://127.0.0.1:3600/` | 200 |
-| 菜单入口 | 浏览器打开 `http://127.0.0.1:5173/` 点击 `GPT Studio` | iframe 中出现原项目 Studio UI |
+| 菜单入口 | 浏览器打开 `http://127.0.0.1:8081/` 点击 `GPT Studio` | iframe 中出现原项目 Studio UI |

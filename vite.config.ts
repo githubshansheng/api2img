@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [".heigh.vip"],
-    port: 5173,
+    port: 8081,
+    strictPort: true,
     proxy: {
       "/api": "http://localhost:8787"
     }

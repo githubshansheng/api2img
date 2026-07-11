@@ -48,11 +48,11 @@ npm run dev
 
 | 服务 | 地址 | 用途 |
 | --- | --- | --- |
-| Vite 前端 | http://127.0.0.1:5173/ | 主工作台入口 |
+| Vite 前端 | http://127.0.0.1:8081/ | 主工作台入口 |
 | Express BFF | http://127.0.0.1:8787/api/health | 本地 API、上游代理与健康检查 |
 | GPT Studio | http://127.0.0.1:3600/ | 迁移版 Studio 原生运行时 |
 
-打开 `http://127.0.0.1:5173/` 后，在“设置中心 -> API 与模型”中填入 API Key、baseUrl 前缀和真实请求模型名，即可开始生成。
+打开 `http://127.0.0.1:8081/` 后，在“设置中心 -> API 与模型”中填入 API Key、baseUrl 前缀和真实请求模型名，即可开始生成。
 
 ## 上游配置
 
@@ -111,7 +111,7 @@ api2img/
 
 ```mermaid
 flowchart LR
-  Browser["浏览器工作台"] --> Vite["Vite Dev Server :5173"]
+  Browser["浏览器工作台"] --> Vite["Vite Dev Server :8081"]
   Vite --> BFF["Express BFF :8787"]
   Browser --> LocalStore["localStorage / IndexedDB"]
   BFF --> Adapter["模型适配器"]
