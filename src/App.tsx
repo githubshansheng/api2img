@@ -90,6 +90,12 @@ import {
   resolveModelApiKey
 } from "./services/model-settings-service";
 import {
+  buildPromptPolishInstruction,
+  extractPolishedPrompt,
+  inferPromptPolishPlatform,
+  type PromptPolishRequest
+} from "./services/prompt-polish-service";
+import {
   DEFAULT_OPENAI_ENDPOINT_VARIANT,
   getModelEndpointPrefix,
   OPENAI_ENDPOINT_VARIANT_OPTIONS,
@@ -2422,6 +2428,40 @@ export function App() {
     );
   }
 
+  async function handlePolishSuitePrompt(request: PromptPolishRequest) {
+    if (!selectedModel) {
+      throw new Error("请先选择一个用于提供请求地址的模型配置。");
+    }
+
+    if (!selectedApiKey) {
+      setSettingsActiveTab("api-model");
+      setSettingsOpen(true);
+      throw new Error("请先在设置中保存主 API Key 或当前模型 API Key。");
+    }
+
+    const modelName =
+      settings.utilityModels.reasoningModelName.trim() ||
+      DEFAULT_UTILITY_REASONING_MODEL_NAME;
+    const result = await runReasoningRequest({
+      requestId: createClientRequestId(),
+      modelId: selectedModel.id,
+      platform: inferPromptPolishPlatform(modelName),
+      modelName,
+      effort: "low",
+      maxTokens: 2048,
+      prompt: buildPromptPolishInstruction(request),
+      apiStyle: "responses",
+      wantSummary: false,
+      endpointOverride: selectedEndpointOverride,
+      modelOverride: {
+        ...selectedModelRequestOverride,
+        apiModelName: modelName
+      }
+    });
+
+    return extractPolishedPrompt(result.outputText);
+  }
+
   async function handleCreateReasoningDraft() {
     if (reasoningStatus === "running") {
       handleCancelReasoningRequest();
@@ -4079,6 +4119,7 @@ export function App() {
                 modelOverride={selectedModelRequestOverride}
                 models={configuredModels}
                 onParamsChange={setGenerationParams}
+                onPolishPrompt={handlePolishSuitePrompt}
                 onSelectModel={setSelectedModelId}
                 params={generationParams}
                 selectedModel={selectedModel}

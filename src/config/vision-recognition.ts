@@ -30,13 +30,22 @@ export const VISION_RECOGNITION_DEFAULT_PROMPT =
 
 export const VISION_RECOGNITION_MODELS: VisionRecognitionModelConfig[] = [
   {
+    id: "gpt-5.6-terra",
+    displayName: "GPT-5.6 Terra",
+    shortName: "GPT-5.6 Terra",
+    description: "默认视觉理解模型，适合图片识别与结构化分析",
+    features: ["视觉理解", "多图分析", "结构化输出"],
+    price: "按服务端实际计费",
+    recommended: true
+  },
+  {
     id: "gpt-5.2",
     displayName: "GPT-5.2",
     shortName: "GPT-5.2",
     description: "最新旗舰模型，卓越理解与推理能力",
     features: ["顶级理解", "深度推理", "多模态分析"],
     price: "$1.75/$14 per 1M tokens",
-    recommended: true
+    recommended: false
   },
   {
     id: "gemini-3-pro-preview",
@@ -91,7 +100,7 @@ export const VISION_RECOGNITION_ROLES: VisionRecognitionRoleConfig[] = [
     name: "万物识别+百科",
     shortName: "万物识别",
     description: "通用图像识别和百科知识分析",
-    defaultModel: "gpt-5.2",
+    defaultModel: "gpt-5.6-terra",
     isDefault: true,
     prompt:
       "请详细识别并分析图片中的所有物品、场景和元素。对于识别到的主要物体，请提供以下信息：\n\n1. 物品名称和类别\n2. 主要特征和细节描述\n3. 相关的百科知识（历史、用途、特点等）\n4. 场景背景和环境分析\n\n请用清晰的结构化方式呈现分析结果。"
@@ -101,7 +110,7 @@ export const VISION_RECOGNITION_ROLES: VisionRecognitionRoleConfig[] = [
     name: "商品取标题",
     shortName: "商品标题",
     description: "为商品图片生成吸引人的电商标题",
-    defaultModel: "gpt-5.2",
+    defaultModel: "gpt-5.6-terra",
     prompt:
       "请作为专业的电商文案，分析这张商品图片并生成3-5个优质的商品标题。要求：\n\n1. 标题长度控制在20-30字\n2. 突出商品的核心卖点和特征\n3. 包含适当的修饰词（如：新款、高品质、爆款等）\n4. 符合电商平台的标题规范\n5. 吸引点击，提升转化\n\n请直接输出标题列表，每个标题单独一行。"
   },
@@ -110,7 +119,7 @@ export const VISION_RECOGNITION_ROLES: VisionRecognitionRoleConfig[] = [
     name: "亚马逊五点描述",
     shortName: "五点描述",
     description: "生成亚马逊商品详情页的五点描述",
-    defaultModel: "gpt-5.2",
+    defaultModel: "gpt-5.6-terra",
     prompt:
       '请作为亚马逊资深运营，根据这张商品图片生成专业的五点描述（Bullet Points）。要求：\n\n1. 每条控制在150-200个字符\n2. 第一点：核心功能或主要用途\n3. 第二点：材质、规格或技术参数\n4. 第三点：独特卖点或竞争优势\n5. 第四点：使用场景或适用人群\n6. 第五点：售后保障或品质承诺\n\n格式要求：\n- 每点用 "✓" 或 "【】" 开头\n- 语言精炼，突出重点\n- 符合亚马逊平台规范'
   },
@@ -119,7 +128,7 @@ export const VISION_RECOGNITION_ROLES: VisionRecognitionRoleConfig[] = [
     name: "商品属性分析器",
     shortName: "属性分析",
     description: "深度分析商品属性，提取结构化信息",
-    defaultModel: "gpt-5.2",
+    defaultModel: "gpt-5.6-terra",
     prompt:
       "请作为商品数据分析师，对图片中的商品进行详细的属性分析。请按以下维度输出结构化信息：\n\n【基础属性】\n- 商品品类：\n- 颜色：\n- 尺寸/规格：\n- 材质：\n- 品牌（如可识别）：\n\n【视觉特征】\n- 设计风格：\n- 主要元素：\n- 色调分析：\n\n【目标市场】\n- 适用人群：\n- 价格档位预估：\n- 销售场景：\n\n【优化建议】\n- 产品优势：\n- 改进空间：\n- 营销建议："
   },
@@ -135,7 +144,8 @@ export const VISION_RECOGNITION_ROLES: VisionRecognitionRoleConfig[] = [
 ];
 
 export const DEFAULT_VISION_RECOGNITION_MODEL =
-  VISION_RECOGNITION_MODELS.find((model) => model.id === "gpt-5.2")?.id ?? VISION_RECOGNITION_MODELS[0].id;
+  VISION_RECOGNITION_MODELS.find((model) => model.id === "gpt-5.6-terra")?.id ??
+  VISION_RECOGNITION_MODELS[0].id;
 
 export const DEFAULT_VISION_RECOGNITION_ROLE =
   VISION_RECOGNITION_ROLES.find((role) => role.isDefault)?.id ?? VISION_RECOGNITION_ROLES[0].id;

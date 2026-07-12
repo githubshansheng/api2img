@@ -25,7 +25,7 @@ export type ReasoningPromptPreset = {
 };
 
 export const REASONING_DEFAULT_BASE_URL = "https://api.apiyi.com";
-export const DEFAULT_REASONING_PLATFORM: ReasoningPlatformId = "anthropic";
+export const DEFAULT_REASONING_PLATFORM: ReasoningPlatformId = "openai";
 export const DEFAULT_REASONING_MAX_TOKENS = 4096;
 export const MAX_REASONING_OUTPUT_TOKENS = 32000;
 
@@ -56,6 +56,7 @@ export const REASONING_PLATFORMS: ReasoningPlatformConfig[] = [
     hint: "可在 Responses 与 Chat Completions 间切换，便于定位端点兼容性。",
     defaultApiStyle: "responses",
     models: [
+      { id: "gpt-5.6-sol", levels: ["none", "low", "medium", "high", "xhigh"], default: "medium" },
       { id: "gpt-5.5", levels: ["none", "low", "medium", "high", "xhigh"], default: "medium" },
       { id: "gpt-5.4", levels: ["none", "low", "medium", "high", "xhigh"], default: "none" }
     ]

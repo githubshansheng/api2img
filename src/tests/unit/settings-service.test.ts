@@ -119,8 +119,32 @@ describe("settings service", () => {
       recognitionModelName: DEFAULT_UTILITY_RECOGNITION_MODEL_NAME,
       reasoningModelName: DEFAULT_UTILITY_REASONING_MODEL_NAME
     });
+    expect(DEFAULT_UTILITY_RECOGNITION_MODEL_NAME).toBe("gpt-5.6-terra");
+    expect(DEFAULT_UTILITY_REASONING_MODEL_NAME).toBe("gpt-5.6-sol");
     expect(settings.utilityModels.recognitionModelName).not.toBe("gpt-image-2");
     expect(settings.utilityModels.reasoningModelName).not.toBe("gpt-image-2");
+  });
+
+  it("migrates the previous utility model defaults for existing users", () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem(
+      "api2image:user-settings:v1",
+      JSON.stringify({
+        mainApiKeyValue: "sk-existing-user",
+        utilityModels: {
+          recognitionModelName: "gpt-5.2",
+          reasoningModelName: "claude-opus-4-8"
+        }
+      })
+    );
+    vi.stubGlobal("window", { localStorage });
+
+    const settings = loadUserSettings();
+
+    expect(settings.utilityModels).toEqual({
+      recognitionModelName: "gpt-5.6-terra",
+      reasoningModelName: "gpt-5.6-sol"
+    });
   });
 
   it("persists utility model settings for real recognition and reasoning requests", () => {

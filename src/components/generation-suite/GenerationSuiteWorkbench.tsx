@@ -52,6 +52,10 @@ import {
   formatFileSize,
   validateReferenceImageFiles
 } from "../../services/upload-service";
+import type {
+  PromptPolishFormat,
+  PromptPolishRequest
+} from "../../services/prompt-polish-service";
 
 type GenerationSuiteWorkbenchProps = {
   models: ModelConfig[];
@@ -62,6 +66,7 @@ type GenerationSuiteWorkbenchProps = {
   modelOverride?: ModelRequestOverride;
   onSelectModel: (modelId: string) => void;
   onParamsChange: (params: GenerationParams) => void;
+  onPolishPrompt: (request: PromptPolishRequest) => Promise<string>;
 };
 
 type SuiteFormSlot = {
@@ -115,7 +120,8 @@ export function GenerationSuiteWorkbench({
   endpointOverride,
   modelOverride,
   onSelectModel,
-  onParamsChange
+  onParamsChange,
+  onPolishPrompt
 }: GenerationSuiteWorkbenchProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const referencesRef = useRef<SuiteReferenceDraft[]>([]);
@@ -137,6 +143,7 @@ export function GenerationSuiteWorkbench({
   const [feedback, setFeedback] = useState<SuiteFeedback>();
   const [streamState, setStreamState] = useState<"idle" | "connected" | "reconnecting">("idle");
   const [loadingInitialData, setLoadingInitialData] = useState(true);
+  const [polishingFields, setPolishingFields] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     referencesRef.current = references;
@@ -284,6 +291,50 @@ export function GenerationSuiteWorkbench({
     setSlots((current) =>
       current.map((slot) => (slot.key === slotKey ? { ...slot, ...patch } : slot))
     );
+  }
+
+  async function handlePolishPrompt(input: {
+    fieldKey: string;
+    fieldLabel: string;
+    value: string;
+    format?: PromptPolishFormat;
+    onApply: (value: string) => void;
+  }) {
+    if (!input.value.trim() || polishingFields.has(input.fieldKey)) {
+      return;
+    }
+
+    setPolishingFields((current) => {
+      const next = new Set(current);
+      next.add(input.fieldKey);
+      return next;
+    });
+    setFeedback(undefined);
+
+    try {
+      const polished = await onPolishPrompt({
+        fieldLabel: input.fieldLabel,
+        value: input.value,
+        templateName: activeTemplate.name,
+        format: input.format
+      });
+      input.onApply(polished);
+      setFeedback({
+        kind: "success",
+        message: `「${input.fieldLabel}」已完成 AI 润色。`
+      });
+    } catch (error) {
+      setFeedback({
+        kind: "error",
+        message: error instanceof Error ? error.message : "AI 润色失败，请稍后重试。"
+      });
+    } finally {
+      setPolishingFields((current) => {
+        const next = new Set(current);
+        next.delete(input.fieldKey);
+        return next;
+      });
+    }
   }
 
   function addSceneSlot() {
@@ -697,56 +748,104 @@ export function GenerationSuiteWorkbench({
             <strong>主体与风格</strong>
           </summary>
           <div className="suite-config-body">
-            <label className="field">
-              <span>主体</span>
-              <textarea
-                onChange={(event) => updateSharedSpec("subject", event.target.value)}
-                placeholder="人物、产品、角色或品牌主体"
-                rows={3}
-                value={sharedSpec.subject}
-              />
-            </label>
-            <label className="field">
-              <span>统一风格</span>
-              <textarea
-                onChange={(event) => updateSharedSpec("style", event.target.value)}
-                rows={3}
-                value={sharedSpec.style}
-              />
-            </label>
+            <PromptTextarea
+              fieldKey="shared:subject"
+              label="主体"
+              loading={polishingFields.has("shared:subject")}
+              onChange={(value) => updateSharedSpec("subject", value)}
+              onPolish={(value) =>
+                handlePolishPrompt({
+                  fieldKey: "shared:subject",
+                  fieldLabel: "主体",
+                  value,
+                  onApply: (polished) => updateSharedSpec("subject", polished)
+                })
+              }
+              placeholder="人物、产品、角色或品牌主体"
+              rows={3}
+              value={sharedSpec.subject}
+            />
+            <PromptTextarea
+              fieldKey="shared:style"
+              label="统一风格"
+              loading={polishingFields.has("shared:style")}
+              onChange={(value) => updateSharedSpec("style", value)}
+              onPolish={(value) =>
+                handlePolishPrompt({
+                  fieldKey: "shared:style",
+                  fieldLabel: "统一风格",
+                  value,
+                  onApply: (polished) => updateSharedSpec("style", polished)
+                })
+              }
+              rows={3}
+              value={sharedSpec.style}
+            />
             <div className="suite-spec-grid">
-              <label className="field">
-                <span>配色</span>
-                <textarea
-                  onChange={(event) => updateSharedSpec("palette", event.target.value)}
-                  rows={3}
-                  value={sharedSpec.palette}
-                />
-              </label>
-              <label className="field">
-                <span>光线</span>
-                <textarea
-                  onChange={(event) => updateSharedSpec("lighting", event.target.value)}
-                  rows={3}
-                  value={sharedSpec.lighting}
-                />
-              </label>
-              <label className="field">
-                <span>镜头</span>
-                <textarea
-                  onChange={(event) => updateSharedSpec("camera", event.target.value)}
-                  rows={3}
-                  value={sharedSpec.camera}
-                />
-              </label>
-              <label className="field">
-                <span>构图</span>
-                <textarea
-                  onChange={(event) => updateSharedSpec("composition", event.target.value)}
-                  rows={3}
-                  value={sharedSpec.composition}
-                />
-              </label>
+              <PromptTextarea
+                fieldKey="shared:palette"
+                label="配色"
+                loading={polishingFields.has("shared:palette")}
+                onChange={(value) => updateSharedSpec("palette", value)}
+                onPolish={(value) =>
+                  handlePolishPrompt({
+                    fieldKey: "shared:palette",
+                    fieldLabel: "配色",
+                    value,
+                    onApply: (polished) => updateSharedSpec("palette", polished)
+                  })
+                }
+                rows={3}
+                value={sharedSpec.palette}
+              />
+              <PromptTextarea
+                fieldKey="shared:lighting"
+                label="光线"
+                loading={polishingFields.has("shared:lighting")}
+                onChange={(value) => updateSharedSpec("lighting", value)}
+                onPolish={(value) =>
+                  handlePolishPrompt({
+                    fieldKey: "shared:lighting",
+                    fieldLabel: "光线",
+                    value,
+                    onApply: (polished) => updateSharedSpec("lighting", polished)
+                  })
+                }
+                rows={3}
+                value={sharedSpec.lighting}
+              />
+              <PromptTextarea
+                fieldKey="shared:camera"
+                label="镜头"
+                loading={polishingFields.has("shared:camera")}
+                onChange={(value) => updateSharedSpec("camera", value)}
+                onPolish={(value) =>
+                  handlePolishPrompt({
+                    fieldKey: "shared:camera",
+                    fieldLabel: "镜头",
+                    value,
+                    onApply: (polished) => updateSharedSpec("camera", polished)
+                  })
+                }
+                rows={3}
+                value={sharedSpec.camera}
+              />
+              <PromptTextarea
+                fieldKey="shared:composition"
+                label="构图"
+                loading={polishingFields.has("shared:composition")}
+                onChange={(value) => updateSharedSpec("composition", value)}
+                onPolish={(value) =>
+                  handlePolishPrompt({
+                    fieldKey: "shared:composition",
+                    fieldLabel: "构图",
+                    value,
+                    onApply: (polished) => updateSharedSpec("composition", polished)
+                  })
+                }
+                rows={3}
+                value={sharedSpec.composition}
+              />
             </div>
           </div>
         </details>
@@ -757,27 +856,41 @@ export function GenerationSuiteWorkbench({
             <strong>{sharedSpec.continuityRules.length} 条</strong>
           </summary>
           <div className="suite-config-body">
-            <label className="field">
-              <span>每行一条规则</span>
-              <textarea
-                onChange={(event) =>
-                  updateSharedSpec(
-                    "continuityRules",
-                    event.target.value.split("\n")
-                  )
-                }
-                rows={5}
-                value={sharedSpec.continuityRules.join("\n")}
-              />
-            </label>
-            <label className="field">
-              <span>排除内容</span>
-              <textarea
-                onChange={(event) => updateSharedSpec("negativePrompt", event.target.value)}
-                rows={3}
-                value={sharedSpec.negativePrompt ?? ""}
-              />
-            </label>
+            <PromptTextarea
+              fieldKey="shared:continuityRules"
+              label="每行一条规则"
+              loading={polishingFields.has("shared:continuityRules")}
+              onChange={(value) => updateSharedSpec("continuityRules", value.split("\n"))}
+              onPolish={(value) =>
+                handlePolishPrompt({
+                  fieldKey: "shared:continuityRules",
+                  fieldLabel: "一致性规则",
+                  value,
+                  format: "line-list",
+                  onApply: (polished) =>
+                    updateSharedSpec("continuityRules", polished.split("\n"))
+                })
+              }
+              rows={5}
+              value={sharedSpec.continuityRules.join("\n")}
+            />
+            <PromptTextarea
+              fieldKey="shared:negativePrompt"
+              label="排除内容"
+              loading={polishingFields.has("shared:negativePrompt")}
+              onChange={(value) => updateSharedSpec("negativePrompt", value)}
+              onPolish={(value) =>
+                handlePolishPrompt({
+                  fieldKey: "shared:negativePrompt",
+                  fieldLabel: "排除内容",
+                  value,
+                  format: "comma-list",
+                  onApply: (polished) => updateSharedSpec("negativePrompt", polished)
+                })
+              }
+              rows={3}
+              value={sharedSpec.negativePrompt ?? ""}
+            />
           </div>
         </details>
 
@@ -920,9 +1033,21 @@ export function GenerationSuiteWorkbench({
                     onChange={(event) => updateSlot(slot.key, { title: event.target.value })}
                     value={slot.title}
                   />
-                  <textarea
-                    aria-label={`${slot.title}生成任务`}
-                    onChange={(event) => updateSlot(slot.key, { scenePrompt: event.target.value })}
+                  <PromptTextarea
+                    compact
+                    fieldKey={`slot:${slot.key}:scenePrompt`}
+                    label="场景提示词"
+                    loading={polishingFields.has(`slot:${slot.key}:scenePrompt`)}
+                    onChange={(value) => updateSlot(slot.key, { scenePrompt: value })}
+                    onPolish={(value) =>
+                      handlePolishPrompt({
+                        fieldKey: `slot:${slot.key}:scenePrompt`,
+                        fieldLabel: `${slot.title}场景提示词`,
+                        value,
+                        onApply: (polished) =>
+                          updateSlot(slot.key, { scenePrompt: polished })
+                      })
+                    }
                     rows={3}
                     value={slot.scenePrompt}
                   />
@@ -1293,6 +1418,62 @@ export function GenerationSuiteWorkbench({
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+type PromptTextareaProps = {
+  compact?: boolean;
+  fieldKey: string;
+  label: string;
+  loading: boolean;
+  onChange: (value: string) => void;
+  onPolish: (value: string) => void;
+  placeholder?: string;
+  rows: number;
+  value: string;
+};
+
+function PromptTextarea({
+  compact = false,
+  fieldKey,
+  label,
+  loading,
+  onChange,
+  onPolish,
+  placeholder,
+  rows,
+  value
+}: PromptTextareaProps) {
+  const inputId = `suite-prompt-${fieldKey.replace(/[^a-z0-9_-]+/gi, "-")}`;
+
+  return (
+    <div className={`field suite-prompt-field${compact ? " is-compact" : ""}`}>
+      <div className="suite-prompt-field-header">
+        <label htmlFor={inputId}>{label}</label>
+        <button
+          aria-label={`AI 润色${label}`}
+          className="suite-prompt-polish-button"
+          disabled={!value.trim() || loading}
+          onClick={() => onPolish(value)}
+          title={value.trim() ? `使用推理模型润色${label}` : "请先输入提示词"}
+          type="button"
+        >
+          {loading ? (
+            <LoaderCircle className="is-spinning" size={14} />
+          ) : (
+            <WandSparkles size={14} />
+          )}
+          <span>{loading ? "润色中" : "AI 润色"}</span>
+        </button>
+      </div>
+      <textarea
+        id={inputId}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        value={value}
+      />
     </div>
   );
 }

@@ -23,6 +23,8 @@ const DEFAULT_STORAGE_TYPE: StorageType = "local-directory";
 const DEFAULT_CLOUD_ENABLED = false;
 const DEFAULT_LOCAL_ARCHIVE_ENABLED = true;
 const CUSTOM_MODEL_ID_PREFIX = "custom-model";
+const LEGACY_DEFAULT_RECOGNITION_MODEL_NAME = "gpt-5.2";
+const LEGACY_DEFAULT_REASONING_MODEL_NAME = "claude-opus-4-8";
 export const DEFAULT_LOCAL_ARCHIVE_DIRECTORY_PATH = "C:\\Users\\%USERNAME%\\Pictures";
 
 export type RuntimeUserSettings = UserSettings & {
@@ -202,9 +204,18 @@ function normalizeEndpointSettings(endpoint?: Partial<EndpointSettings>): Endpoi
 }
 
 function normalizeUtilityModelSettings(utilityModels?: Partial<UtilityModelSettings>): UtilityModelSettings {
+  const recognitionModelName = trimOptional(utilityModels?.recognitionModelName);
+  const reasoningModelName = trimOptional(utilityModels?.reasoningModelName);
+
   return {
-    recognitionModelName: trimOptional(utilityModels?.recognitionModelName) ?? DEFAULT_UTILITY_RECOGNITION_MODEL_NAME,
-    reasoningModelName: trimOptional(utilityModels?.reasoningModelName) ?? DEFAULT_UTILITY_REASONING_MODEL_NAME
+    recognitionModelName:
+      !recognitionModelName || recognitionModelName === LEGACY_DEFAULT_RECOGNITION_MODEL_NAME
+        ? DEFAULT_UTILITY_RECOGNITION_MODEL_NAME
+        : recognitionModelName,
+    reasoningModelName:
+      !reasoningModelName || reasoningModelName === LEGACY_DEFAULT_REASONING_MODEL_NAME
+        ? DEFAULT_UTILITY_REASONING_MODEL_NAME
+        : reasoningModelName
   };
 }
 
