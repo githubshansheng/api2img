@@ -1,9 +1,8 @@
 import cors from "cors";
 import express from "express";
 import type { Response as ExpressResponse } from "express";
-import { selectImageAdapter, summarizeAdapterRequest } from "../src/adapters";
+import path from "node:path";
 import { DEFAULT_MODEL_ID, getEnabledModels, getModelById } from "../src/config/models";
-import { createDefaultGenerationParams } from "../src/domain";
 import type {
   AdapterHttpRequest,
   AdapterHttpResponse,
@@ -11,13 +10,6 @@ import type {
   GenerationRequestPayload
 } from "../src/domain";
 import { createGenerationError, normalizeGenerationError } from "../src/services/error-service";
-import { buildGenerationRequestDraft } from "../src/services/generation-draft-service";
-import {
-  buildAcceptedGenerationResponse,
-  defaultGenerationServerOptions,
-  estimateGenerationCost,
-  validateGenerationForm
-} from "../src/services/generation-form-service";
 import { findInvalidHeaderValueCharacter } from "../src/services/http-header-service";
 import { applyModelRequestOverride } from "../src/services/model-settings-service";
 import {
@@ -31,9 +23,32 @@ import {
   type ReasoningRequestPayload,
   type RecognitionRequestPayload
 } from "../src/services/responses-api-service";
+import { executeGenerationRequest } from "./generation-executor";
+import { GenerationSuiteAssetStore } from "./suite/suite-assets";
+import { createGenerationSuiteRouter } from "./suite/suite-router";
+import { GenerationSuiteService } from "./suite/suite-service";
+import { GenerationSuiteStore } from "./suite/suite-store";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
+const suiteDataDirectory = path.resolve(
+  process.env.API2IMG_DATA_DIR ?? path.join(process.cwd(), ".data", "suites")
+);
+const remoteImageHostAllowlist = (process.env.API2IMG_REMOTE_IMAGE_HOSTS ?? "")
+  .split(",")
+  .map((hostname) => hostname.trim())
+  .filter(Boolean);
+const generationSuiteService = new GenerationSuiteService({
+  store: new GenerationSuiteStore(path.join(suiteDataDirectory, "generation-suites.sqlite")),
+  assets: new GenerationSuiteAssetStore(
+    path.join(suiteDataDirectory, "assets"),
+    "/api/generation-suites/assets",
+    {
+      archiveRemoteImages: process.env.API2IMG_ARCHIVE_REMOTE_IMAGES !== "false",
+      remoteHostAllowlist: remoteImageHostAllowlist
+    }
+  )
+});
 
 app.use(cors());
 app.use(express.json({ limit: "100mb" }));
@@ -222,113 +237,18 @@ app.post("/api/reasoning/test", async (req, res) => {
 });
 
 app.post("/api/generations", async (req, res) => {
-  const input = req.body as Partial<GenerationRequestPayload>;
-  const model = input.modelId ? getModelById(input.modelId) : undefined;
+  const execution = await executeGenerationRequest(req.body as Partial<GenerationRequestPayload>);
 
-  if (!model || !model.enabled) {
-    res.status(400).json({
-      success: false,
-      error: {
-        id: crypto.randomUUID(),
-        type: "validation",
-        code: "MODEL_NOT_FOUND",
-        title: "模型不可用",
-        message: "请选择一个可用模型后再创建生成请求",
-        retryable: false
-      },
-      requestId: crypto.randomUUID(),
-      serverTime: new Date().toISOString()
-    });
-    return;
-  }
-
-  const runtimeModel = applyModelRequestOverride(model, input.modelOverride);
-  const payload: GenerationRequestPayload = {
-    requestId: input.requestId ?? crypto.randomUUID(),
-    modelId: runtimeModel.id,
-    prompt: input.prompt ?? "",
-    negativePrompt: input.negativePrompt,
-    referenceImages: Array.isArray(input.referenceImages) ? input.referenceImages : [],
-    params: input.params ?? createDefaultGenerationParams(runtimeModel),
-    endpointOverride: input.endpointOverride,
-    modelOverride: input.modelOverride,
-    options: {
-      ...defaultGenerationServerOptions,
-      ...input.options
-    },
-    clientContext: input.clientContext
-  };
-  const validation = validateGenerationForm({
-    model: runtimeModel,
-    prompt: payload.prompt ?? "",
-    referenceImages: payload.referenceImages,
-    params: payload.params,
-    requireApiKey: false
-  });
-
-  if (!validation.isValid) {
-    const firstError = validation.errors[0];
-
-    res.status(400).json({
-      success: false,
-      error: {
-        id: crypto.randomUUID(),
-        type: "validation",
-        code: firstError?.code ?? "GENERATION_VALIDATION_FAILED",
-        title: "生成请求校验失败",
-        message: firstError?.message ?? "请检查生成参数",
-        retryable: false,
-        safeDetails: validation.errors.map((issue) => `${issue.field}:${issue.code}`).join(";")
-      },
-      requestId: payload.requestId,
-      serverTime: new Date().toISOString()
-    });
-    return;
-  }
-
-  const costPreview = estimateGenerationCost(runtimeModel, payload.params);
-  const accepted = buildAcceptedGenerationResponse(payload, costPreview, validation.warnings);
-  const adapter = selectImageAdapter(runtimeModel);
-
-  if (!adapter) {
-    res.status(400).json({
-      success: false,
-      error: {
-        id: crypto.randomUUID(),
-        type: "validation",
-        code: "ADAPTER_NOT_FOUND",
-        title: "模型适配器不可用",
-        message: "当前模型暂未配置可用的图片适配器",
-        retryable: false
-      },
-      requestId: payload.requestId,
-      serverTime: new Date().toISOString()
-    });
-    return;
-  }
-
-  const draft = buildGenerationRequestDraft({
-    payload,
-    model: runtimeModel,
-    apiKey: payload.endpointOverride?.apiKey,
-    endpointOverride: payload.endpointOverride
-  });
-  const adapterRequest = adapter.buildRequest(draft);
-  const upstreamResponse = await sendAdapterHttpRequest(adapterRequest);
-  const adapterResult = adapter.parseResponse(upstreamResponse, draft);
-
-  res.status(202).json({
-    success: true,
-    data: {
-      ...accepted,
-      status: adapterResult.status,
-      adapterRequest: summarizeAdapterRequest(adapter.name, adapterRequest, draft),
-      result: adapterResult
-    },
-    requestId: accepted.requestId,
+  res.status(execution.statusCode).json({
+    success: execution.success,
+    data: execution.success ? execution.data : undefined,
+    error: execution.success ? undefined : execution.error,
+    requestId: execution.requestId,
     serverTime: new Date().toISOString()
   });
 });
+
+app.use("/api/generation-suites", createGenerationSuiteRouter(generationSuiteService));
 
 async function executeResponsesRequest(input: {
   res: ExpressResponse;

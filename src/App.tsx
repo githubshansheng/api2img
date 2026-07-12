@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import { createDefaultGenerationParams, resolveModelCapabilities } from "./domain";
+import { GenerationSuiteWorkbench } from "./components/generation-suite/GenerationSuiteWorkbench";
 import type {
   ApiError,
   CreateGenerationResponse,
@@ -765,6 +766,7 @@ export function App() {
   const [generationParams, setGenerationParams] = useState<GenerationParams>(() =>
     createSingleOutputGenerationParams(fallbackBootstrapConfig.models[0])
   );
+  const [generationWorkspaceMode, setGenerationWorkspaceMode] = useState<"single" | "suite">("single");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState<SettingsTabKey>("api-model");
   const [showRealKey, setShowRealKey] = useState(false);
@@ -4052,6 +4054,37 @@ export function App() {
               </div>
             </section>
           ) : (
+          <>
+            <div className="generation-mode-switch" aria-label="生成模式">
+              <button
+                className={generationWorkspaceMode === "single" ? "is-active" : undefined}
+                onClick={() => setGenerationWorkspaceMode("single")}
+                type="button"
+              >
+                <Images size={16} />
+                单图生成
+              </button>
+              <button
+                className={generationWorkspaceMode === "suite" ? "is-active" : undefined}
+                onClick={() => setGenerationWorkspaceMode("suite")}
+                type="button"
+              >
+                <GalleryVerticalEnd size={16} />
+                一致性套图
+              </button>
+            </div>
+            {generationWorkspaceMode === "suite" ? (
+              <GenerationSuiteWorkbench
+                endpointOverride={selectedEndpointOverride}
+                modelOverride={selectedModelRequestOverride}
+                models={configuredModels}
+                onParamsChange={setGenerationParams}
+                onSelectModel={setSelectedModelId}
+                params={generationParams}
+                selectedModel={selectedModel}
+                selectedModelId={selectedModel?.id ?? selectedModelId}
+              />
+            ) : (
           <div className="workbench-grid">
             <section className="panel input-panel" aria-label="输入与参数">
               <div>
@@ -4752,6 +4785,8 @@ export function App() {
               </footer>
             </section>
           </div>
+            )}
+          </>
           )}
         </section>
       </main>

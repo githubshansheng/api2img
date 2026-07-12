@@ -27,6 +27,7 @@ coverage/
 # Local platform/deployment state
 .vercel/
 .wrangler/
+.data/
 
 # Logs and local run artifacts
 *.log
