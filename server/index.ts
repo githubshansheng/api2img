@@ -24,6 +24,10 @@ import {
   type RecognitionRequestPayload
 } from "../src/services/responses-api-service";
 import { executeGenerationRequest } from "./generation-executor";
+import { EditAssetStore } from "./edit/edit-assets";
+import { createEditSessionRouter } from "./edit/edit-router";
+import { EditSessionService } from "./edit/edit-service";
+import { EditSessionStore } from "./edit/edit-store";
 import { GenerationSuiteAssetStore } from "./suite/suite-assets";
 import { createGenerationSuiteRouter } from "./suite/suite-router";
 import { GenerationSuiteService } from "./suite/suite-service";
@@ -34,6 +38,9 @@ const port = Number(process.env.PORT ?? 8787);
 const suiteDataDirectory = path.resolve(
   process.env.API2IMG_DATA_DIR ?? path.join(process.cwd(), ".data", "suites")
 );
+const editDataDirectory = path.resolve(
+  process.env.API2IMG_EDIT_DATA_DIR ?? path.join(process.cwd(), ".data", "editing")
+);
 const remoteImageHostAllowlist = (process.env.API2IMG_REMOTE_IMAGE_HOSTS ?? "")
   .split(",")
   .map((hostname) => hostname.trim())
@@ -43,6 +50,17 @@ const generationSuiteService = new GenerationSuiteService({
   assets: new GenerationSuiteAssetStore(
     path.join(suiteDataDirectory, "assets"),
     "/api/generation-suites/assets",
+    {
+      archiveRemoteImages: process.env.API2IMG_ARCHIVE_REMOTE_IMAGES !== "false",
+      remoteHostAllowlist: remoteImageHostAllowlist
+    }
+  )
+});
+const editSessionService = new EditSessionService({
+  store: new EditSessionStore(path.join(editDataDirectory, "edit-sessions.sqlite")),
+  assets: new EditAssetStore(
+    path.join(editDataDirectory, "assets"),
+    "/api/edit-sessions/assets",
     {
       archiveRemoteImages: process.env.API2IMG_ARCHIVE_REMOTE_IMAGES !== "false",
       remoteHostAllowlist: remoteImageHostAllowlist
@@ -64,6 +82,7 @@ const bootstrap = {
   models: getEnabledModels(),
   defaultModelId: DEFAULT_MODEL_ID,
   featureFlags: {
+    enableImageEditingWorkbench: true,
     enableBatch: true,
     enableCompare: true,
     enableHistory: true,
@@ -77,6 +96,7 @@ const bootstrap = {
   },
   navItems: [
     { key: "studio", label: "GPT Studio", enabled: true },
+    { key: "editing", label: "修图工作台", enabled: true },
     { key: "generation", label: "生成图片", enabled: true },
     { key: "compare", label: "模型对比", enabled: true },
     { key: "history", label: "历史记录", enabled: true },
@@ -249,6 +269,7 @@ app.post("/api/generations", async (req, res) => {
 });
 
 app.use("/api/generation-suites", createGenerationSuiteRouter(generationSuiteService));
+app.use("/api/edit-sessions", createEditSessionRouter(editSessionService));
 
 async function executeResponsesRequest(input: {
   res: ExpressResponse;

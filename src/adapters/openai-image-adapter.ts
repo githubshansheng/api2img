@@ -13,6 +13,7 @@ import {
   buildJsonHeaders,
   buildPromptWithParamHints,
   endpointURL,
+  extractFirstString,
   normalizeImageOutputFormat,
   parseConfiguredImageResponse,
   ratioToOpenAISize
@@ -29,6 +30,13 @@ export const openAIImageAdapter: ImageAdapter = {
     const useResponsesEndpoint =
       draft.endpointOverride?.endpointVariant === "responses" || draft.model.endpointType === "responses";
     const prompt = buildPromptWithParamHints(draft, true);
+    const nativeMaskRequest =
+      !useResponsesEndpoint && buildNativeMaskRequest(draft, prompt);
+
+    if (nativeMaskRequest) {
+      return nativeMaskRequest;
+    }
+
     const body: Record<string, unknown> = useResponsesEndpoint
       ? {
           model: draft.model.apiModelName,
@@ -44,6 +52,14 @@ export const openAIImageAdapter: ImageAdapter = {
         };
     const size = ratioToOpenAISize(draft);
     const hasReferenceImages = draft.referenceImages.length > 0;
+
+    if (
+      useResponsesEndpoint &&
+      draft.continuation?.strategy === "openai-response" &&
+      draft.continuation.responseId
+    ) {
+      body.previous_response_id = draft.continuation.responseId;
+    }
 
     if (!useResponsesEndpoint && draft.model.capabilities.maxOutputs > 1 && !draft.model.request.omitFields.includes("n")) {
       body.n = draft.params.count;
@@ -92,7 +108,23 @@ export const openAIImageAdapter: ImageAdapter = {
   },
 
   parseResponse(response: AdapterHttpResponse, draft: GenerationRequestDraft): AdapterResult {
-    return parseConfiguredImageResponse(response, draft);
+    const parsed = parseConfiguredImageResponse(response, draft);
+
+    if (response.statusCode >= 400) {
+      return parsed;
+    }
+
+    return {
+      ...parsed,
+      continuation: {
+        responseId: extractFirstString(response.body, ["id", "response.id"]),
+        imageGenerationCallId: extractFirstString(response.body, [
+          "output[].id",
+          "output[].call_id",
+          "output[].image_generation_call.id"
+        ])
+      }
+    };
   },
 
   buildCurl(draft: GenerationRequestDraft, options: CurlBuildOptions) {
@@ -214,4 +246,55 @@ function buildResponsesInput(prompt: string, draft: GenerationRequestDraft) {
       ]
     }
   ];
+}
+
+function buildNativeMaskRequest(
+  draft: GenerationRequestDraft,
+  prompt: string
+): AdapterHttpRequest | undefined {
+  const source = draft.referenceImages[draft.nativeMask?.sourceImageIndex ?? 0];
+  const mask = draft.nativeMask?.image;
+
+  if (!source?.base64 || !mask?.base64) {
+    return undefined;
+  }
+
+  const form = new FormData();
+  form.append("model", draft.model.apiModelName);
+  form.append("prompt", prompt);
+  form.append("image", base64ToBlob(source.base64, source.mimeType), source.name);
+  form.append("mask", base64ToBlob(mask.base64, mask.mimeType), mask.name);
+  const size = ratioToOpenAISize(draft);
+
+  if (size) {
+    form.append("size", size);
+  }
+
+  if (draft.params.quality !== "auto") {
+    form.append("quality", draft.params.quality);
+  }
+
+  if (draft.params.outputFormat) {
+    form.append("output_format", normalizeImageOutputFormat(draft.params.outputFormat));
+  }
+
+  const headers = buildJsonHeaders(draft);
+  delete headers["Content-Type"];
+
+  return {
+    method: "POST",
+    url: endpointURL(draft.model, draft, true),
+    headers,
+    body: form,
+    contentType: "multipart/form-data",
+    timeoutMs: draft.model.request.timeoutMs
+  };
+}
+
+function base64ToBlob(value: string, mimeType: string) {
+  const clean = value.includes(";base64,")
+    ? value.slice(value.indexOf(";base64,") + ";base64,".length)
+    : value;
+  const bytes = Uint8Array.from(atob(clean), (character) => character.charCodeAt(0));
+  return new Blob([bytes], { type: mimeType });
 }

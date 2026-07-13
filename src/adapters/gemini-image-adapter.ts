@@ -15,6 +15,7 @@ import {
   createGenerationError,
   endpointURL,
   extractFirstNumber,
+  extractFirstString,
   extractStringValues,
   failedResult,
   parseConfiguredImageResponse,
@@ -113,8 +114,14 @@ export const geminiImageAdapter: ImageAdapter = {
       imageConfig.resolution = draft.params.resolution;
     }
 
+    const previousContents =
+      draft.continuation?.strategy === "gemini-context" &&
+      Array.isArray(draft.continuation.opaqueMetadata?.contents)
+        ? draft.continuation.opaqueMetadata.contents
+        : [];
     const body: Record<string, unknown> = {
       contents: [
+        ...previousContents,
         {
           role: "user",
           parts
@@ -193,10 +200,26 @@ export const geminiImageAdapter: ImageAdapter = {
     }
 
     const parsed = parseConfiguredImageResponse(response, draft, "Gemini 未返回图片");
+    const continuation = {
+      interactionId: extractFirstString(response.body, [
+        "responseId",
+        "id",
+        "candidates[].content.parts[].thoughtSignature"
+      ]),
+      opaqueMetadata: {
+        contents: appendGeminiConversationContents(
+          Array.isArray(draft.continuation?.opaqueMetadata?.contents)
+            ? draft.continuation.opaqueMetadata.contents
+            : [],
+          response.body
+        )
+      }
+    };
 
     if (mappedFinishReason && parsed.status !== "failed") {
       return {
         ...parsed,
+        continuation,
         rawResponseSummary: {
           summary: summarizeResponse(response.body),
           finishReason
@@ -204,10 +227,60 @@ export const geminiImageAdapter: ImageAdapter = {
       };
     }
 
-    return parsed;
+    return {
+      ...parsed,
+      continuation
+    };
   },
 
   buildCurl(draft: GenerationRequestDraft, options: CurlBuildOptions) {
     return buildCurlForRequest(this.buildRequest(draft), options);
   }
 };
+
+function appendGeminiConversationContents(previous: unknown[], body: unknown) {
+  const record = isRecord(body) ? body : undefined;
+  const candidates = Array.isArray(record?.candidates) ? record.candidates : [];
+  const content = candidates
+    .map((candidate) => (isRecord(candidate) ? candidate.content : undefined))
+    .find(isRecord);
+
+  if (!content) {
+    return previous.slice(-6);
+  }
+
+  const parts: Array<{ text: string } | { thoughtSignature: string }> =
+    Array.isArray(content.parts)
+      ? content.parts.reduce<
+          Array<{ text: string } | { thoughtSignature: string }>
+        >((values, part) => {
+          if (!isRecord(part)) {
+            return values;
+          }
+
+          if (typeof part.text === "string") {
+            values.push({ text: part.text });
+          } else if (typeof part.thoughtSignature === "string") {
+            values.push({ thoughtSignature: part.thoughtSignature });
+          }
+
+          return values;
+        }, [])
+      : [];
+
+  if (parts.length === 0) {
+    return previous.slice(-6);
+  }
+
+  return [
+    ...previous,
+    {
+      role: typeof content.role === "string" ? content.role : "model",
+      parts
+    }
+  ].slice(-6);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

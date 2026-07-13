@@ -190,6 +190,43 @@ describe("image adapters", () => {
     expect(body).not.toHaveProperty("image");
   });
 
+  it("sends OpenAI native edit masks as multipart image and mask files", () => {
+    const draft = createDraft("gpt-image-2", {
+      referenceImages: [
+        {
+          id: "source-1",
+          name: "source.png",
+          mimeType: "image/png",
+          format: "png",
+          base64: `data:image/png;base64,${TEST_IMAGE_BASE64}`,
+          order: 0
+        }
+      ],
+      nativeMask: {
+        image: {
+          id: "mask-1",
+          name: "mask.png",
+          mimeType: "image/png",
+          format: "png",
+          base64: `data:image/png;base64,${TEST_IMAGE_BASE64}`,
+          order: 0
+        },
+        sourceImageIndex: 0
+      }
+    });
+    const request = openAIImageAdapter.buildRequest(draft);
+    const form = request.body as FormData;
+
+    expect(request.url).toContain("/v1/images/edits");
+    expect(request.contentType).toBe("multipart/form-data");
+    expect(request.headers).not.toHaveProperty("Content-Type");
+    expect(form).toBeInstanceOf(FormData);
+    expect(form.get("model")).toBe("gpt-image-2");
+    expect(form.get("prompt")).toContain("生成一张产品海报");
+    expect(form.get("image")).toBeInstanceOf(Blob);
+    expect(form.get("mask")).toBeInstanceOf(Blob);
+  });
+
   it("builds OpenAI Responses image generation requests when selected", () => {
     const draft = createDraft("gpt-image-2", {
       endpointOverride: {
@@ -224,6 +261,27 @@ describe("image adapters", () => {
       output_compression: 70,
       background: "auto"
     });
+  });
+
+  it("continues OpenAI Responses edits with previous_response_id", () => {
+    const draft = createDraft("gpt-image-2", {
+      endpointOverride: {
+        baseURL: "https://proxy.example",
+        endpointVariant: "responses"
+      },
+      continuation: {
+        provider: "openai",
+        modelId: "gpt-image-2",
+        compatibilityKey: "openai|gpt-image-2|responses",
+        strategy: "openai-response",
+        responseId: "resp_previous"
+      }
+    });
+    const request = openAIImageAdapter.buildRequest(draft);
+    const body = request.body as Record<string, unknown>;
+
+    expect(request.url).toBe("https://proxy.example/v1/responses");
+    expect(body.previous_response_id).toBe("resp_previous");
   });
 
   it("maps OpenAI upstream errors through normalized error types", () => {
@@ -367,6 +425,40 @@ describe("image adapters", () => {
     expect(body.contents[0]?.parts[0]?.text).toContain("生成一张产品海报");
     expect(body.contents[0]?.parts[1]?.inlineData?.mimeType).toBe("image/png");
     expect(body.contents[0]?.parts[1]?.inlineData?.data).toBe(TEST_IMAGE_BASE64);
+  });
+
+  it("continues Gemini edits by prepending saved conversation contents", () => {
+    const previousContents = [
+      {
+        role: "user",
+        parts: [{ text: "先把背景改成蓝色。" }]
+      },
+      {
+        role: "model",
+        parts: [{ text: "已完成背景调整。" }]
+      }
+    ];
+    const draft = createDraft("nano-banana-pro", {
+      continuation: {
+        provider: "google",
+        modelId: "nano-banana-pro",
+        compatibilityKey: "google|nano-banana-pro|gemini",
+        strategy: "gemini-context",
+        interactionId: "interaction-1",
+        opaqueMetadata: {
+          contents: previousContents
+        }
+      }
+    });
+    const request = geminiImageAdapter.buildRequest(draft);
+    const body = request.body as {
+      contents: Array<{ role: string; parts: Array<{ text?: string }> }>;
+    };
+
+    expect(body.contents).toHaveLength(3);
+    expect(body.contents.slice(0, 2)).toEqual(previousContents);
+    expect(body.contents[2]?.role).toBe("user");
+    expect(body.contents[2]?.parts[0]?.text).toContain("生成一张产品海报");
   });
 
   it("maps Gemini candidatesTokenCount=0 to safety error", () => {

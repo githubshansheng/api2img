@@ -2,6 +2,7 @@ import type { LangCode, NoticeLevel, PageKey } from "./common";
 import type { ModelConfig } from "./model";
 
 export type FeatureFlags = {
+  enableImageEditingWorkbench: boolean;
   enableBatch: boolean;
   enableCompare: boolean;
   enableHistory: boolean;
@@ -53,4 +54,3 @@ export type ClientContext = {
   timezone?: string;
   source?: string;
 };
-

@@ -119,6 +119,31 @@ export type PreparedReferenceImage = {
   order: number;
 };
 
+export type NativeMaskInput = {
+  image: PreparedReferenceImage;
+  sourceImageIndex: number;
+  inverted?: boolean;
+};
+
+export type ProviderContinuationInput = {
+  provider: string;
+  modelId: string;
+  compatibilityKey: string;
+  strategy: "openai-response" | "gemini-context";
+  responseId?: string;
+  imageGenerationCallId?: string;
+  interactionId?: string;
+  opaqueMetadata?: Record<string, unknown>;
+  expiresAt?: string;
+};
+
+export type ProviderContinuationOutput = {
+  responseId?: string;
+  imageGenerationCallId?: string;
+  interactionId?: string;
+  opaqueMetadata?: Record<string, unknown>;
+};
+
 export type GenerationRequestDraft = {
   requestId: string;
   mode: GenerationMode;
@@ -126,6 +151,8 @@ export type GenerationRequestDraft = {
   prompt: string;
   negativePrompt?: string;
   referenceImages: PreparedReferenceImage[];
+  nativeMask?: NativeMaskInput;
+  continuation?: ProviderContinuationInput;
   params: GenerationParams;
   apiKey?: string;
   endpointOverride?: EndpointOverride;
@@ -165,6 +192,7 @@ export type AdapterResult = {
   images: GeneratedImage[];
   rawResponseSummary?: unknown;
   usage?: UsageInfo;
+  continuation?: ProviderContinuationOutput;
   durationMs: number;
   error?: GenerationError;
 };
@@ -236,6 +264,12 @@ export type GenerationRequestPayload = {
   prompt?: string;
   negativePrompt?: string;
   referenceImages: GenerationReferenceInput[];
+  nativeMask?: {
+    image: GenerationReferenceInput;
+    sourceImageIndex: number;
+    inverted?: boolean;
+  };
+  continuation?: ProviderContinuationInput;
   params: GenerationParams;
   endpointOverride?: EndpointOverride;
   modelOverride?: ModelRequestOverride;

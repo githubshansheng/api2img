@@ -57,6 +57,8 @@ export async function executeGenerationRequest(
     prompt: input.prompt ?? "",
     negativePrompt: input.negativePrompt,
     referenceImages: Array.isArray(input.referenceImages) ? input.referenceImages : [],
+    nativeMask: input.nativeMask,
+    continuation: input.continuation,
     params: input.params ?? createDefaultGenerationParams(runtimeModel),
     endpointOverride: input.endpointOverride,
     modelOverride: input.modelOverride,

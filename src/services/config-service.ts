@@ -11,6 +11,7 @@ export const fallbackBootstrapConfig: BootstrapConfig = {
   models: getEnabledModels(),
   defaultModelId: DEFAULT_MODEL_ID,
   featureFlags: {
+    enableImageEditingWorkbench: true,
     enableBatch: true,
     enableCompare: true,
     enableHistory: true,
@@ -24,6 +25,7 @@ export const fallbackBootstrapConfig: BootstrapConfig = {
   },
   navItems: [
     { key: "studio", label: "GPT Studio", enabled: true },
+    { key: "editing", label: "修图工作台", enabled: true },
     { key: "generation", label: "生成图片", enabled: true },
     { key: "compare", label: "模型对比", enabled: true },
     { key: "history", label: "历史记录", enabled: true },

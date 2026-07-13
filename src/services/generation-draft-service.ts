@@ -21,6 +21,14 @@ export function buildGenerationRequestDraft(input: BuildGenerationRequestDraftIn
     prompt: input.payload.prompt?.trim() ?? "",
     negativePrompt: input.payload.negativePrompt?.trim() || undefined,
     referenceImages: prepareDraftReferences(input.payload.referenceImages),
+    nativeMask: input.payload.nativeMask
+      ? {
+          image: prepareDraftReferences([input.payload.nativeMask.image])[0]!,
+          sourceImageIndex: input.payload.nativeMask.sourceImageIndex,
+          inverted: input.payload.nativeMask.inverted
+        }
+      : undefined,
+    continuation: input.payload.continuation,
     params: input.payload.params,
     apiKey: input.apiKey,
     endpointOverride: input.endpointOverride ?? input.payload.endpointOverride,

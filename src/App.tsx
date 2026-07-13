@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Box,
+  Brush,
   Check,
   ChevronDown,
   ChevronUp,
@@ -29,6 +30,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
 import { createDefaultGenerationParams, resolveModelCapabilities } from "./domain";
 import { GenerationSuiteWorkbench } from "./components/generation-suite/GenerationSuiteWorkbench";
+import { ImageEditingWorkbench } from "./components/image-editing/ImageEditingWorkbench";
 import type {
   ApiError,
   CreateGenerationResponse,
@@ -96,6 +98,10 @@ import {
   type PromptPolishRequest
 } from "./services/prompt-polish-service";
 import {
+  analyzeEditInstructionWithAI,
+  type AnalyzeEditInstructionInput
+} from "./services/edit-instruction-service";
+import {
   DEFAULT_OPENAI_ENDPOINT_VARIANT,
   getModelEndpointPrefix,
   OPENAI_ENDPOINT_VARIANT_OPTIONS,
@@ -160,6 +166,7 @@ import {
 
 const icons: Record<PageKey, React.ComponentType<{ size?: number }>> = {
   studio: Sparkles,
+  editing: Brush,
   generation: WandSparkles,
   compare: Compass,
   history: Clock3,
@@ -228,6 +235,11 @@ const pageSummaries: Record<PageKey, { title: string; eyebrow: string; status: s
     title: "GPT-Image2 Studio",
     eyebrow: "参考项目移植",
     status: "原项目运行时已内嵌到当前项目，保留 Studio 的多模式创作、画廊、记录和配置体验。"
+  },
+  editing: {
+    title: "修图工作台",
+    eyebrow: "连续对话式图像编辑",
+    status: "在同一会话中执行整图、局部蒙版和双版本合并编辑，AI 会先润色并校验指令，再生成可检出的候选版本。"
   },
   generation: {
     title: "生成图片",
@@ -757,6 +769,23 @@ function createSingleOutputGenerationParams(model: ModelConfig): GenerationParam
   };
 }
 
+function loadInitialPage(): PageKey {
+  const requested = new URLSearchParams(window.location.search).get("page");
+  const pages: PageKey[] = [
+    "studio",
+    "editing",
+    "generation",
+    "compare",
+    "history",
+    "assets",
+    "recognition",
+    "reasoning"
+  ];
+  return pages.includes(requested as PageKey)
+    ? (requested as PageKey)
+    : "generation";
+}
+
 export function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -765,7 +794,7 @@ export function App() {
   const reasoningAbortRef = useRef<AbortController | undefined>(undefined);
   const runningRequestIdsRef = useRef<Set<string>>(new Set());
   const runningGenerationModelCountsRef = useRef<Map<string, number>>(new Map());
-  const [activePage, setActivePage] = useState<PageKey>("generation");
+  const [activePage, setActivePage] = useState<PageKey>(loadInitialPage);
   const [activeStudioRoute, setActiveStudioRoute] = useState(GPT_STUDIO_FEATURE_ROUTES[0].route);
   const [bootstrap, setBootstrap] = useState(fallbackBootstrapConfig);
   const [selectedModelId, setSelectedModelId] = useState(fallbackBootstrapConfig.defaultModelId);
@@ -2462,6 +2491,29 @@ export function App() {
     return extractPolishedPrompt(result.outputText);
   }
 
+  async function handleAnalyzeEditInstruction(
+    input: AnalyzeEditInstructionInput
+  ) {
+    if (!selectedModel) {
+      throw new Error("请先选择一个可用的图片模型。");
+    }
+
+    if (!selectedApiKey) {
+      throw new Error("请先在设置中保存 API Key 或当前模型 Key。");
+    }
+
+    const modelName =
+      settings.utilityModels.reasoningModelName.trim() ||
+      DEFAULT_UTILITY_REASONING_MODEL_NAME;
+
+    return analyzeEditInstructionWithAI(input, {
+      modelId: selectedModel.id,
+      modelName,
+      endpointOverride: selectedEndpointOverride,
+      modelOverride: selectedModelRequestOverride
+    });
+  }
+
   async function handleCreateReasoningDraft() {
     if (reasoningStatus === "running") {
       handleCancelReasoningRequest();
@@ -3089,7 +3141,7 @@ export function App() {
         <section
           className={`page-surface${activePage === "studio" ? " studio-page-surface" : ""}${
             activePage === "generation" ? " generation-page-surface" : ""
-          }`}
+          }${activePage === "editing" ? " editing-page-surface" : ""}`}
         >
           {activePage !== "studio" && (
             <div className="page-heading">
@@ -3135,6 +3187,18 @@ export function App() {
                 title="GPT-Image2 Studio"
               />
             </section>
+          ) : activePage === "editing" ? (
+            <ImageEditingWorkbench
+              endpointOverride={selectedEndpointOverride}
+              modelOverride={selectedModelRequestOverride}
+              models={configuredModels}
+              onAnalyzeInstruction={handleAnalyzeEditInstruction}
+              onParamsChange={setGenerationParams}
+              onSelectModel={setSelectedModelId}
+              params={generationParams}
+              selectedModel={selectedModel}
+              selectedModelId={selectedModel?.id ?? selectedModelId}
+            />
           ) : activePage === "history" ? (
             <section className="history-view" aria-label="历史记录列表">
               <div className="history-toolbar">

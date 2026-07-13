@@ -19,6 +19,8 @@ export type AuthScheme = "Bearer" | "ApiKey" | "None";
 export type ContentType = "application/json" | "multipart/form-data";
 export type ImageInputMode = "none" | "base64" | "url" | "multipart" | "auto";
 export type ModelNameMode = "current" | "legacy-preview";
+export type EditLocalMode = "native-mask" | "annotated-reference" | "none";
+export type EditContinuationMode = "openai-response" | "gemini-context" | "reference";
 export type TemporaryRestrictionType =
   | "size_disabled"
   | "resolution_locked"
@@ -88,6 +90,14 @@ export type ModelCapabilities = {
   supportsSeed: boolean;
   supportsNegativePrompt: boolean;
   supportsStylePreset: boolean;
+};
+
+export type ModelEditCapabilities = {
+  supportsWholeImageEdit: boolean;
+  localMode: EditLocalMode;
+  continuationMode: EditContinuationMode;
+  supportsBranchMerge: boolean;
+  maxCandidates: number;
 };
 
 export type RetryPolicy = {
@@ -185,6 +195,7 @@ export type ModelConfig = {
   description?: string;
   price: PriceConfig;
   capabilities: ModelCapabilities;
+  editCapabilities: ModelEditCapabilities;
   request: RequestPolicy;
   response: ResponsePolicy;
   featureFlags: ModelFeatureFlags;

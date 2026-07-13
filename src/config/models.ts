@@ -231,6 +231,23 @@ function createModel(seed: ModelSeed): ModelConfig {
       supportsNegativePrompt: false,
       supportsStylePreset: false
     },
+    editCapabilities: {
+      supportsWholeImageEdit: seed.maxReferenceImages > 0,
+      localMode:
+        isOpenAI && seed.maxReferenceImages > 0
+          ? "native-mask"
+          : seed.maxReferenceImages > 1
+            ? "annotated-reference"
+            : "none",
+      continuationMode:
+        isOpenAI && seed.endpointType === "responses"
+          ? "openai-response"
+          : isGemini
+            ? "gemini-context"
+            : "reference",
+      supportsBranchMerge: seed.maxReferenceImages > 1,
+      maxCandidates: seed.maxReferenceImages > 0 ? 4 : 1
+    },
     request: {
       authHeaderName: "Authorization",
       authScheme: "Bearer",
