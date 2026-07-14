@@ -89,6 +89,16 @@ npm run dev
 
 工作台的模式、选区、蒙版、AI 润色、生成、候选、版本和质检等主要按钮都提供悬停提示，便于新手理解操作结果与前置条件。完整能力、架构、API、权限边界和验收证据见 [《AI 修图工作台功能说明》](docs/image-editing-workbench.md)。
 
+### 修图会话隔离
+
+修图工作台为每个浏览器签发独立的匿名访客 Cookie。会话、源图、候选图、蒙版、模板、品牌素材、指标、配额和生命周期清理均只属于该访客工作区；图片目录不再作为公开静态目录暴露。
+
+- Cookie 为签名 `HttpOnly` Cookie，使用 `SameSite=Lax`，有效期为 30 天并在使用时续期；生产环境还会启用 `Secure`。
+- 清除浏览器 Cookie 或站点数据后，原会话和图片无法恢复；复制该 Cookie 等同于转移该匿名工作区的访问权。
+- 该机制不是账号体系，不提供跨浏览器或跨设备恢复。需要此能力时应接入登录和服务端账号绑定。
+- 分享页会为其图片 URL 附加有效的 `shareToken`；该 token 仅能读取其绑定会话的资产，撤销、过期或跨会话使用都会失败。
+- 升级前已有的修图会话统一冻结为遗留数据，不会自动分配给任何新浏览器。管理员可按功能文档中的认领步骤显式恢复单条会话。
+
 ## 上游配置
 
 默认内置配置面向 OpenAI 兼容图片接口，默认模型为 `gpt-image-2`，默认 baseUrl 前缀为 `https://ai.heigh.vip`。你可以在设置中心改为自己的代理或官方端点。
@@ -110,6 +120,7 @@ npm run dev
 | `PORT` | `8787` | Express BFF 监听端口 |
 | `API2IMG_DATA_DIR` | `.data/suites` | 套图 SQLite 与素材目录的持久化根路径，生产环境应指向有写权限且会备份的目录 |
 | `API2IMG_EDIT_DATA_DIR` | `.data/editing` | 修图会话 SQLite、源图、蒙版和结果资产的持久化根路径 |
+| `API2IMG_EDIT_SESSION_SECRET` | 开发环境内置固定值 | 修图匿名访客 Cookie 的 HMAC 密钥；生产环境必须设置为高熵、仅服务端可见的随机值，变更后已有匿名访客 Cookie 将失效 |
 | `API2IMG_ARCHIVE_REMOTE_IMAGES` | `true` | 是否把远程参考图和上游 URL 图片下载到本地素材目录；设置为 `false` 或归档失败时，仅保留无账号、无查询参数、无片段且解析到公网地址的 HTTP(S) URL，签名 URL 不会写入数据库 |
 | `API2IMG_REMOTE_IMAGE_HOSTS` | 空 | 逗号分隔的远程图片归档域名白名单；为空时仍会执行协议、DNS 和公网地址校验 |
 
@@ -127,6 +138,7 @@ npm run dev
 | `npm run test -- --pool=threads --maxWorkers=1` | 运行单元测试 |
 | `npm run build` | 类型检查并构建前端产物 |
 | `npm run audit:studio-vendor` | 检查 vendored Studio 文件完整性 |
+| `API2IMG_EDIT_SESSION_SECRET=... node scripts/claim-legacy-edit-session.mjs --database <db> --session <id> --cookie <cookie>` | 管理员将一条冻结遗留修图会话认领给指定匿名浏览器；只允许认领 `legacy-frozen` 会话 |
 
 ## 本地 API
 
@@ -138,6 +150,7 @@ npm run dev
 | `/api/recognition/analyze` | `POST` | 调用视觉模型执行图片识别 |
 | `/api/reasoning/test` | `POST` | 调用推理模型执行测试请求 |
 | `/api/edit-sessions` | `GET/POST` | 获取修图会话列表或上传源图创建会话；轮次、候选、版本、协作和平台接口详见修图功能文档 |
+| `/api/edit-sessions/assets/:filename` | `GET` | 读取当前匿名访客自己的修图图片；分享页需要匹配会话的有效 `shareToken` 查询参数 |
 | `/api/generation-suites/templates` | `GET` | 获取一致性套图预设 |
 | `/api/generation-suites` | `GET` | 获取套图历史，支持 `limit` 查询参数 |
 | `/api/generation-suites` | `POST` | 创建套图草稿并持久化参考图 |
@@ -198,6 +211,8 @@ flowchart LR
 - cURL 预览默认使用 `sk-YOUR_API_KEY` 占位符，只有用户显式选择时才展示真实 Key。
 - 错误映射、历史记录和埋点逻辑避免记录完整 API Key、完整提示词、完整图片 URL 和未脱敏错误详情。
 - 套图记录持久化前会移除 API Key、认证 Header、URL 用户信息和敏感查询参数；服务重启后必须重新提交运行凭据。
+- 修图会话与本地图片按签名匿名访客 Cookie 隔离；未授权浏览器读取会话或图片时统一得到不可枚举的拒绝响应。
+- 生产环境必须设置 `API2IMG_EDIT_SESSION_SECRET`；该 Cookie 用于匿名工作区归属，不替代账号登录、跨设备同步或租户安全。
 - 远程图片归档仅允许 HTTP/HTTPS 公网地址，逐次校验 DNS 与重定向，固定已校验的解析地址，并校验大小、内容类型和 PNG/JPEG/WebP 文件签名，降低 SSRF 与 DNS 重绑定风险。
 - 生成结果中的临时 URL 可能过期，重要图片请及时下载或归档。
 - 提交代码前建议运行 `rg -n "sk-|api[_-]?key|secret|token|password|BEGIN .*PRIVATE KEY" . -S` 进行敏感信息复查。

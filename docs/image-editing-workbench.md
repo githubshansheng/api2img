@@ -3,7 +3,7 @@
 | 文档项 | 内容 |
 | --- | --- |
 | 状态 | V1 已交付并完成验收 |
-| 文档版本 | 1.0 |
+| 文档版本 | 1.1 |
 | 最后更新 | 2026-07-14 |
 | 适用范围 | api2img 本地 AI 修图工作台 |
 
@@ -44,6 +44,16 @@
 - 可通过关闭按钮、`Esc` 键或点击弹窗外区域退出预览。
 - 大图预览内可直接下载候选，或将候选检出为当前版本并继续下一轮。
 - 主要模式、选区、蒙版、AI 润色、生成、候选、版本和质量检查按钮均提供悬停提示，说明操作结果与使用前提。
+
+### 匿名浏览器会话
+
+修图工作台不要求登录，但会为每个浏览器建立独立匿名访客身份。服务端签发签名 `HttpOnly` Cookie，并以此为边界隔离会话、图片资产、工作空间模板、品牌素材、运营指标、配额和生命周期清理。
+
+- Cookie 默认 30 天有效，访问修图 API 时滑动续期；使用 `SameSite=Lax`，生产环境使用 `Secure`。
+- 生产环境必须配置 `API2IMG_EDIT_SESSION_SECRET`，作为 Cookie 和匿名工作空间派生的 HMAC 密钥。
+- 清除 Cookie 或浏览器站点数据后，原工作区无法恢复；复制 Cookie 会把该匿名工作区的访问权一并复制。
+- 匿名 Cookie 不等同于账号，不能支持跨设备访问、人员识别或可恢复的账号找回。
+- 会话 ID 不构成授权凭据。普通会话、SSE、导出、编辑、删除和图片读取都必须同时满足当前访客归属；未授权返回不可枚举的拒绝结果。
 
 ## 2. 行业方案映射
 
@@ -228,7 +238,7 @@
 | 审核、发布和平台配置 | 禁止 | 禁止 | 禁止 | 允许 |
 | 查看运营数据、成本和审计 | 禁止 | 禁止 | 禁止 | 允许 |
 
-服务端通过 `X-Edit-Share-Token` 校验 REST 请求，通过 `shareToken` 查询参数校验 SSE。
+服务端通过 `X-Edit-Share-Token` 校验 REST 请求，通过 `shareToken` 查询参数校验 SSE。图片标签无法携带自定义请求头，因此分享页会将 `shareToken` 附加到 `/api/edit-sessions/assets/:filename` URL；服务端仅允许该 token 读取其绑定会话的图片，且继续遵守失效、撤销、过期和权限限制。
 
 ## 6. 技术架构
 
@@ -243,9 +253,10 @@
 
 ### 6.2 后端
 
-- `server/edit/edit-router.ts`：REST、SSE、分享权限和错误归一化。
-- `server/edit/edit-service.ts`：会话状态机、版本治理、协作、配额和生命周期。
-- `server/edit/edit-store.ts`：SQLite schema v2、旧数据兼容和工作空间。
+- `server/edit/edit-router.ts`：REST、SSE、匿名访客、图片授权、分享权限和错误归一化。
+- `server/edit/edit-visitor.ts`：签名匿名 Cookie、30 天滑动续期和访客工作空间派生。
+- `server/edit/edit-service.ts`：会话状态机、版本治理、协作、按工作空间的配额与生命周期、图片授权。
+- `server/edit/edit-store.ts`：SQLite schema v3、会话归属、遗留冻结迁移和工作空间。
 - `server/edit/edit-assets.ts`：源图、蒙版、结果和回滚清理。
 - `server/edit/edit-analyzer.ts`：指令分析校验和启发式回退。
 - `server/edit/edit-mask-compositor.ts`：规范多区域蒙版合成与 OpenAI 透明选区语义转换。
@@ -257,7 +268,8 @@
 - 默认目录：`.data/editing`
 - SQLite：会话、轮次、消息、任务、尝试、版本、父版本、分支、continuation、工作空间和扩展数据。
 - 文件资产：源图、蒙版、标注图和生成结果。
-- schema v1 会话读取时补齐工作空间、版本元数据、区域参数、评论、审核和工作流默认值。
+- 图片目录不作公开静态挂载；资产路由根据数据库中的资产归属执行授权后才读取文件。
+- schema v1/v2 会话升级到 schema v3 时会写入 `legacy-frozen` 归属，不会对任何新匿名访客可见。
 - API Key、认证 Header 和运行时凭证只保留在执行内存中。
 - 取消、重复提交、数据库失败和晚到结果均执行资产回滚。
 
@@ -272,6 +284,7 @@
 | `GET/PATCH/DELETE` | `/api/edit-sessions/:id` | 读取、更新或删除会话 |
 | `GET` | `/api/edit-sessions/:id/events` | SSE 实时事件 |
 | `GET` | `/api/edit-sessions/shared/:token` | 读取分享会话 |
+| `GET` | `/api/edit-sessions/assets/:filename` | 读取当前访客自己的图片，或读取带有效 `shareToken` 的对应分享图片 |
 
 ### 编辑与版本
 
@@ -323,13 +336,24 @@ analyzing
 
 ## 9. 当前安全边界
 
-当前实现是单机工作台，不是公网多租户权限系统：
+当前实现已具备匿名浏览器级隔离，但仍不是账号或公网多租户权限系统：
 
-- 没有账号登录、会话身份、组织租户隔离和所有者认证。
-- 分享 token 请求有服务端动作权限校验，但普通本地 API 仍可被同机客户端直接调用。
-- 因此分享权限适合本地演示、受控内网和产品流程验证，不能宣称公网级安全。
-- 对外部署前必须增加登录、服务端 session/JWT、资源所有权校验、租户隔离、CSRF/CORS 策略、请求限速、对象存储签名 URL 和密钥托管。
-- 本地 SQLite 和资产目录不提供跨设备同步、高可用、灾备和并发写扩展。
+- 每个访客通过签名 `HttpOnly` Cookie 隔离自己的会话、图片和工作空间数据；复制 Cookie 即复制访问权，清除 Cookie 后无法恢复。
+- Cookie 只能在服务端用 `API2IMG_EDIT_SESSION_SECRET` 验证。生产环境缺少该密钥时服务不会启动修图路由。
+- 图片不再暴露为公开静态文件；资产请求必须是当前所有者，或携带绑定同一会话且仍有效的分享 token。
+- 遗留修图数据默认冻结为 `legacy-frozen`，普通浏览器无法查询或读取其资产，避免升级时把旧图片意外分配给新访客。
+- 管理员如需恢复某一条冻结会话，必须掌握目标浏览器的完整 `api2img_edit_visitor` Cookie，并在服务端执行：
+
+```bash
+API2IMG_EDIT_SESSION_SECRET=... node scripts/claim-legacy-edit-session.mjs \
+  --database .data/editing/edit-sessions.sqlite \
+  --session <legacy-session-id> \
+  --cookie <api2img_edit_visitor-cookie-value-or-header>
+```
+
+该命令只更新归属仍为 `legacy-frozen` 的单条会话；不会批量认领，也不会自动向任意新浏览器暴露历史图片。
+
+- 该机制不提供登录、人员身份、跨设备同步、高可用、灾备或多实例写入扩展。对外部署前仍应增加账号、服务端 session/JWT、CSRF/CORS 策略、限速、对象存储和密钥托管。
 
 ## 10. 下一阶段规划
 
@@ -400,13 +424,14 @@ analyzing
 | 局部选区与原生 mask | mask service、服务端多区域 compositor、multipart `image + mask`、标注参考图回退 | mask 工具、`add/subtract/intersect` 合成、全部规范区域进入原生 mask 与 OpenAI multipart 测试 | 已交付 |
 | 技术质量检查 | `edit-quality-service`、版本 `qualityAssessment`、差异热力图 | 相同图、选区内修改、外部漂移、硬边缘、重采样、持久化校验测试 | 已交付 |
 | 取消、幂等与资产一致性 | `clientTurnId`、任务取消、资产回滚、重启中断恢复 | 重复提交、取消后晚到结果、重启 `interrupted` 测试 | 已交付 |
-| 分享权限 | REST/SSE token 校验与动作权限矩阵 | `view/comment/edit` 路由权限与脱敏测试 | 已交付（本地 V1） |
+| 匿名会话与图片隔离 | 签名 Cookie、归属字段、受保护资产路由、访客工作空间 | 双 Cookie Jar 的会话、SSE、编辑、导出、图片、分享、模板与遗留迁移测试 | 已交付 |
+| 分享权限 | REST/SSE/图片 token 校验与动作权限矩阵 | `view/comment/edit` 路由权限、分享图片和脱敏测试 | 已交付（本地 V1） |
 | 语义、身份、文字和品牌自动评分 | 固定评测集、视觉/文字识别评估器 | 尚未建立 | 路线图 P0/P1 |
 | 账号、租户与公网部署安全 | 登录、所有权、租户隔离、云存储与任务队列 | 尚未建立 | 路线图 P2 |
 
 最终回归证据（2026-07-14）：
 
-- `npm test -- --pool=threads --maxWorkers=1`：39 个测试文件、191 个用例通过。
+- `npm test -- --pool=threads --maxWorkers=1`：40 个测试文件、198 个用例通过。
 - `npm run typecheck`、`npm run build`、`git diff --check` 均通过；构建仅保留既有的大 chunk 提示。
 - CDP 自动化在 1440x900、1366x720、768x1024、390x844 四个精确视口验证无页面级横向溢出、无三栏面板重叠、四个检查器 Tab 可见且控制台错误为 0。
 - 自动化完成会话归档、归档列表读取、编辑锁定、恢复和审计记录验证。

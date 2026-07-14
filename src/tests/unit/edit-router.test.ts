@@ -6,15 +6,22 @@ import type { AddressInfo } from "node:net";
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EditSessionEvent } from "../../domain";
+import { EditAssetStore } from "../../../server/edit/edit-assets";
 import { createEditSessionRouter } from "../../../server/edit/edit-router";
 import {
   EditSessionService,
   EditSessionServiceError
 } from "../../../server/edit/edit-service";
-import { createEditSessionFixture } from "../helpers/image-editing";
+import { EditSessionStore } from "../../../server/edit/edit-store";
+import { createEditVisitorMiddleware } from "../../../server/edit/edit-visitor";
+import {
+  createEditImageInput,
+  createEditSessionFixture
+} from "../helpers/image-editing";
 
 const servers: Server[] = [];
 const temporaryDirectories: string[] = [];
+const stores: EditSessionStore[] = [];
 
 afterEach(async () => {
   await Promise.all(
@@ -26,6 +33,7 @@ afterEach(async () => {
         })
     )
   );
+  stores.splice(0).forEach((store) => store.close());
   temporaryDirectories.splice(0).forEach((directory) => {
     fs.rmSync(directory, { recursive: true, force: true });
   });
@@ -41,6 +49,53 @@ async function startRouterServer(service: EditSessionService) {
   const address = server.address() as AddressInfo;
 
   return `http://127.0.0.1:${address.port}/api/edit-sessions`;
+}
+
+function createIsolatedService() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "api2img-edit-isolation-"));
+  const store = new EditSessionStore(path.join(directory, "edit-sessions.sqlite"));
+  temporaryDirectories.push(directory);
+  stores.push(store);
+
+  return {
+    service: new EditSessionService({
+      store,
+      assets: new EditAssetStore(path.join(directory, "assets"))
+    }),
+    store
+  };
+}
+
+async function createBrowser(baseURL: string) {
+  const response = await fetch(baseURL);
+
+  return {
+    cookie: readVisitorCookie(response),
+    response
+  };
+}
+
+function fetchAsBrowser(
+  url: string,
+  cookie: string,
+  options: RequestInit = {}
+) {
+  const headers = new Headers(options.headers);
+  headers.set("Cookie", cookie);
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
+
+function readVisitorCookie(response: Response) {
+  const setCookie = response.headers.get("set-cookie");
+
+  if (!setCookie) {
+    throw new Error("Expected the edit visitor middleware to issue a cookie.");
+  }
+
+  return setCookie.split(";")[0]!;
 }
 
 function createFakeService() {
@@ -322,6 +377,266 @@ describe("edit session router", () => {
     expect(frame).not.toContain("token-view");
     expect(frame).not.toContain("audit-secret");
     controller.abort();
+  });
+
+  it("isolates anonymous visitor sessions, workspaces, mutations, SSE, and assets", async () => {
+    const { service, store } = createIsolatedService();
+    const baseURL = await startRouterServer(service);
+    const browserA = await createBrowser(baseURL);
+    const browserB = await createBrowser(baseURL);
+    const createResponse = await fetchAsBrowser(baseURL, browserA.cookie, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        modelId: "gpt-image-2",
+        source: createEditImageInput("visitor-a-source")
+      })
+    });
+    const createdBody = await createResponse.json();
+    const session = createdBody.data;
+    const assetURL = new URL(session.assets[0].url, baseURL).toString();
+
+    expect(createResponse.status).toBe(201);
+
+    const listA = await fetchAsBrowser(baseURL, browserA.cookie);
+    const listB = await fetchAsBrowser(baseURL, browserB.cookie);
+    expect((await listA.json()).data).toHaveLength(1);
+    expect((await listB.json()).data).toEqual([]);
+
+    const forbiddenRequests = [
+      fetchAsBrowser(`${baseURL}/${session.id}`, browserB.cookie),
+      fetchAsBrowser(`${baseURL}/${session.id}`, browserB.cookie, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "other browser" })
+      }),
+      fetchAsBrowser(`${baseURL}/${session.id}/turns`, browserB.cookie, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }),
+      fetchAsBrowser(`${baseURL}/${session.id}/branches`, browserB.cookie, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }),
+      fetchAsBrowser(`${baseURL}/${session.id}/comments`, browserB.cookie, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }),
+      fetchAsBrowser(`${baseURL}/${session.id}/export`, browserB.cookie),
+      fetchAsBrowser(`${baseURL}/${session.id}/events`, browserB.cookie),
+      fetchAsBrowser(`${baseURL}/${session.id}`, browserB.cookie, {
+        method: "DELETE"
+      })
+    ];
+
+    for (const response of await Promise.all(forbiddenRequests)) {
+      expect(response.status).toBe(404);
+    }
+
+    const ownerUpdate = await fetchAsBrowser(`${baseURL}/${session.id}`, browserA.cookie, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "visitor A updated session" })
+    });
+    expect(ownerUpdate.status).toBe(200);
+    expect((await ownerUpdate.json()).data.title).toBe("visitor A updated session");
+
+    const workspaceUpdate = await fetchAsBrowser(
+      `${baseURL}/platform/workspace`,
+      browserA.cookie,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Visitor A workspace",
+          quota: { dailyCandidateLimit: 1 }
+        })
+      }
+    );
+    expect(workspaceUpdate.status).toBe(200);
+
+    const templateResponse = await fetchAsBrowser(
+      `${baseURL}/platform/templates`,
+      browserA.cookie,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Visitor A template",
+          instruction: "Improve the lighting."
+        })
+      }
+    );
+    expect(templateResponse.status).toBe(201);
+
+    const brandAssetResponse = await fetchAsBrowser(
+      `${baseURL}/platform/brand-assets`,
+      browserA.cookie,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Visitor A asset",
+          kind: "reference",
+          sessionId: session.id,
+          versionId: session.currentVersionId,
+          assetURL: session.assets[0].url
+        })
+      }
+    );
+    expect(brandAssetResponse.status).toBe(201);
+
+    const platformA = await fetchAsBrowser(`${baseURL}/platform`, browserA.cookie);
+    const platformB = await fetchAsBrowser(`${baseURL}/platform`, browserB.cookie);
+    const platformAData = (await platformA.json()).data;
+    const platformBData = (await platformB.json()).data;
+    expect(platformAData.workspace).toMatchObject({
+      name: "Visitor A workspace",
+      quota: { dailyCandidateLimit: 1 }
+    });
+    expect(platformAData.workspace.templates).toHaveLength(1);
+    expect(platformAData.workspace.brandAssets).toHaveLength(1);
+    expect(platformAData.metrics.sessionCount).toBe(1);
+    expect(platformBData.workspace.name).not.toBe("Visitor A workspace");
+    expect(platformBData.workspace.templates).toEqual([]);
+    expect(platformBData.workspace.brandAssets).toEqual([]);
+    expect(platformBData.metrics.sessionCount).toBe(0);
+
+    expect((await fetchAsBrowser(assetURL, browserA.cookie)).status).toBe(200);
+    expect((await fetchAsBrowser(assetURL, browserB.cookie)).status).toBe(404);
+    expect((await fetch(`${assetURL}?shareToken=invalid-share-token`)).status).toBe(404);
+
+    const shareResponse = await fetchAsBrowser(
+      `${baseURL}/${session.id}/share-links`,
+      browserA.cookie,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permission: "view" })
+      }
+    );
+    const share = (await shareResponse.json()).data.link;
+    expect(shareResponse.status).toBe(201);
+    expect(
+      (await fetch(`${assetURL}?shareToken=${encodeURIComponent(share.token)}`)).status
+    ).toBe(200);
+
+    const secondSessionResponse = await fetchAsBrowser(baseURL, browserA.cookie, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        modelId: "gpt-image-2",
+        source: createEditImageInput("visitor-a-second-source")
+      })
+    });
+    const secondSession = (await secondSessionResponse.json()).data;
+    const secondAssetURL = new URL(secondSession.assets[0].url, baseURL).toString();
+    expect(
+      (
+        await fetch(
+          `${secondAssetURL}?shareToken=${encodeURIComponent(share.token)}`
+        )
+      ).status
+    ).toBe(404);
+
+    const expiredShare = await fetchAsBrowser(
+      `${baseURL}/${session.id}/share-links`,
+      browserA.cookie,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permission: "view" })
+      }
+    );
+    const expiredShareToken = (await expiredShare.json()).data.link.token;
+    const storedSession = store.getAny(session.id)!;
+    const expiredLink = storedSession.shareLinks!.find(
+      (link) => link.token === expiredShareToken
+    )!;
+    expiredLink.expiresAt = "2020-01-01T00:00:00.000Z";
+    store.save(storedSession);
+    expect(
+      (
+        await fetch(
+          `${assetURL}?shareToken=${encodeURIComponent(expiredShareToken)}`
+        )
+      ).status
+    ).toBe(404);
+
+    const revokeResponse = await fetchAsBrowser(
+      `${baseURL}/${session.id}/share-links/${share.id}`,
+      browserA.cookie,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revoked: true })
+      }
+    );
+    expect(revokeResponse.status).toBe(200);
+    expect(
+      (await fetch(`${assetURL}?shareToken=${encodeURIComponent(share.token)}`)).status
+    ).toBe(404);
+  });
+
+  it("signs, renews, and replaces anonymous visitor cookies", async () => {
+    const { service } = createIsolatedService();
+    const baseURL = await startRouterServer(service);
+    const first = await fetch(baseURL);
+    const firstCookie = readVisitorCookie(first);
+    const setCookie = first.headers.get("set-cookie")!;
+
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Lax");
+    expect(setCookie).toContain("Path=/api/edit-sessions");
+    expect(setCookie).not.toContain("Secure");
+
+    const renewed = await fetchAsBrowser(baseURL, firstCookie);
+    expect(readVisitorCookie(renewed)).toBe(firstCookie);
+
+    const tamperedCookie = `${firstCookie.slice(0, -1)}x`;
+    const tampered = await fetchAsBrowser(baseURL, tamperedCookie);
+    expect((await tampered.json()).data).toEqual([]);
+    expect(readVisitorCookie(tampered)).not.toBe(firstCookie);
+  });
+
+  it("requires a visitor secret and marks the cookie Secure in production", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.API2IMG_EDIT_SESSION_SECRET;
+
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.API2IMG_EDIT_SESSION_SECRET;
+      expect(() => createEditVisitorMiddleware()).toThrow(
+        "API2IMG_EDIT_SESSION_SECRET is required"
+      );
+
+      process.env.API2IMG_EDIT_SESSION_SECRET = "production-test-secret";
+      const app = express();
+      app.use(createEditVisitorMiddleware());
+      app.get("/", (_req, res) => res.status(204).end());
+      const server = http.createServer(app);
+      servers.push(server);
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/`);
+
+      expect(response.headers.get("set-cookie")).toContain("Secure");
+    } finally {
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+
+      if (originalSecret === undefined) {
+        delete process.env.API2IMG_EDIT_SESSION_SECRET;
+      } else {
+        process.env.API2IMG_EDIT_SESSION_SECRET = originalSecret;
+      }
+    }
   });
 });
 

@@ -17,6 +17,8 @@ import { createGenerationError } from "../../src/services/error-service";
 
 type SessionRow = {
   id: string;
+  owner_id: string;
+  workspace_id: string;
   title: string;
   status: EditSession["status"];
   default_model_id: string;
@@ -41,6 +43,12 @@ type WorkspaceRow = {
   data_json: string;
 };
 
+type AssetSessionRow = {
+  session_id: string;
+  owner_id: string;
+};
+
+export const LEGACY_EDIT_OWNER_ID = "legacy-frozen";
 export class EditSessionStore {
   private readonly database: Database.Database;
 
@@ -50,10 +58,11 @@ export class EditSessionStore {
     this.database.pragma("journal_mode = WAL");
     this.database.pragma("foreign_keys = ON");
     this.database.pragma("busy_timeout = 5000");
-    this.database.pragma("user_version = 2");
     this.database.exec(`
       CREATE TABLE IF NOT EXISTS edit_sessions (
         id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL DEFAULT '${LEGACY_EDIT_OWNER_ID}',
+        workspace_id TEXT NOT NULL DEFAULT '${DEFAULT_WORKSPACE_ID}',
         title TEXT NOT NULL,
         status TEXT NOT NULL,
         default_model_id TEXT NOT NULL,
@@ -159,6 +168,21 @@ export class EditSessionStore {
     const editJobColumns = this.database.pragma(
       "table_info(edit_jobs)"
     ) as Array<{ name: string }>;
+    const sessionColumns = this.database.pragma(
+      "table_info(edit_sessions)"
+    ) as Array<{ name: string }>;
+
+    if (!sessionColumns.some((column) => column.name === "owner_id")) {
+      this.database.exec(
+        `ALTER TABLE edit_sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT '${LEGACY_EDIT_OWNER_ID}'`
+      );
+    }
+
+    if (!sessionColumns.some((column) => column.name === "workspace_id")) {
+      this.database.exec(
+        `ALTER TABLE edit_sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '${DEFAULT_WORKSPACE_ID}'`
+      );
+    }
 
     if (!editJobColumns.some((column) => column.name === "candidate_index")) {
       this.database.exec(
@@ -167,23 +191,38 @@ export class EditSessionStore {
     }
 
     this.database.exec(`
+      UPDATE edit_sessions
+      SET owner_id = '${LEGACY_EDIT_OWNER_ID}'
+      WHERE owner_id IS NULL OR trim(owner_id) = '';
+
+      UPDATE edit_sessions
+      SET workspace_id = '${DEFAULT_WORKSPACE_ID}'
+      WHERE workspace_id IS NULL OR trim(workspace_id) = '';
+
+      CREATE INDEX IF NOT EXISTS idx_edit_sessions_owner_updated_at
+        ON edit_sessions(owner_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_edit_sessions_workspace_updated_at
+        ON edit_sessions(workspace_id, updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_edit_jobs_turn
         ON edit_jobs(turn_id, candidate_index);
     `);
+    this.database.pragma("user_version = 3");
   }
 
-  save(session: EditSession) {
+  save(session: EditSession, ownerId?: string) {
     const transaction = this.database.transaction((value: EditSession) => {
       this.database.prepare(`
         INSERT INTO edit_sessions (
-          id, title, status, default_model_id, current_version_id, current_branch_id,
+          id, owner_id, workspace_id, title, status, default_model_id, current_version_id, current_branch_id,
           created_at, updated_at, archived_at
         )
         VALUES (
-          @id, @title, @status, @defaultModelId, @currentVersionId, @currentBranchId,
+          @id, COALESCE(@ownerId, '${LEGACY_EDIT_OWNER_ID}'), @workspaceId, @title, @status, @defaultModelId, @currentVersionId, @currentBranchId,
           @createdAt, @updatedAt, @archivedAt
         )
         ON CONFLICT(id) DO UPDATE SET
+          owner_id = COALESCE(@ownerId, edit_sessions.owner_id),
+          workspace_id = excluded.workspace_id,
           title = excluded.title,
           status = excluded.status,
           default_model_id = excluded.default_model_id,
@@ -193,6 +232,8 @@ export class EditSessionStore {
           archived_at = excluded.archived_at
       `).run({
         id: value.id,
+        ownerId: ownerId ?? null,
+        workspaceId: value.workspaceId ?? DEFAULT_WORKSPACE_ID,
         title: value.title,
         status: value.status,
         defaultModelId: value.defaultModelId,
@@ -348,10 +389,22 @@ export class EditSessionStore {
     return session;
   }
 
-  get(id: string) {
+  get(id: string, ownerId = LEGACY_EDIT_OWNER_ID) {
+    return this.read(id, ownerId);
+  }
+
+  getAny(id: string) {
+    return this.read(id);
+  }
+
+  private read(id: string, ownerId?: string) {
     const row = this.database
-      .prepare("SELECT * FROM edit_sessions WHERE id = ?")
-      .get(id) as SessionRow | undefined;
+      .prepare(
+        ownerId
+          ? "SELECT * FROM edit_sessions WHERE id = ? AND owner_id = ?"
+          : "SELECT * FROM edit_sessions WHERE id = ?"
+      )
+      .get(...(ownerId ? [id, ownerId] : [id])) as SessionRow | undefined;
 
     if (!row) {
       return undefined;
@@ -387,7 +440,7 @@ export class EditSessionStore {
     return normalizeSession({
       schemaVersion: parsedExtras.schemaVersion ?? 1,
       id: row.id,
-      workspaceId: parsedExtras.workspaceId ?? DEFAULT_WORKSPACE_ID,
+      workspaceId: row.workspace_id ?? parsedExtras.workspaceId ?? DEFAULT_WORKSPACE_ID,
       title: row.title,
       status: row.status,
       defaultModelId: row.default_model_id,
@@ -433,29 +486,45 @@ export class EditSessionStore {
     } satisfies EditSession);
   }
 
-  list(limit = 50) {
+  list(limit = 50, ownerId = LEGACY_EDIT_OWNER_ID) {
     const safeLimit = Math.min(
       Math.max(1, Math.floor(limit)),
       100
     );
     const ids = this.database
-      .prepare("SELECT id FROM edit_sessions ORDER BY updated_at DESC LIMIT ?")
-      .all(safeLimit) as Array<{ id: string }>;
+      .prepare(
+        "SELECT id FROM edit_sessions WHERE owner_id = ? ORDER BY updated_at DESC LIMIT ?"
+      )
+      .all(ownerId, safeLimit) as Array<{ id: string }>;
 
     return ids.flatMap(({ id }) => {
-      const session = this.get(id);
+      const session = this.get(id, ownerId);
       return session ? [toSummary(session)] : [];
     });
   }
 
-  getAll(limit = 1000) {
+  getAll(limit = 1000, ownerId = LEGACY_EDIT_OWNER_ID) {
+    return this.readAll(limit, "owner_id = ?", [ownerId]);
+  }
+
+  getAllAny(limit = 1000) {
+    return this.readAll(limit);
+  }
+
+  getAllByWorkspace(workspaceId: string, limit = 1000) {
+    return this.readAll(limit, "workspace_id = ?", [workspaceId]);
+  }
+
+  private readAll(limit: number, where?: string, values: unknown[] = []) {
     const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 10_000);
     const ids = this.database
-      .prepare("SELECT id FROM edit_sessions ORDER BY updated_at DESC LIMIT ?")
-      .all(safeLimit) as Array<{ id: string }>;
+      .prepare(
+        `SELECT id FROM edit_sessions${where ? ` WHERE ${where}` : ""} ORDER BY updated_at DESC LIMIT ?`
+      )
+      .all(...values, safeLimit) as Array<{ id: string }>;
 
     return ids.flatMap(({ id }) => {
-      const session = this.get(id);
+      const session = this.getAny(id);
       return session ? [session] : [];
     });
   }
@@ -486,8 +555,22 @@ export class EditSessionStore {
     return normalized;
   }
 
-  delete(id: string) {
-    return this.database.prepare("DELETE FROM edit_sessions WHERE id = ?").run(id).changes > 0;
+  delete(id: string, ownerId = LEGACY_EDIT_OWNER_ID) {
+    return this.database
+      .prepare("DELETE FROM edit_sessions WHERE id = ? AND owner_id = ?")
+      .run(id, ownerId).changes > 0;
+  }
+
+  findAssetSession(assetURL: string) {
+    return this.database
+      .prepare(`
+        SELECT edit_assets.session_id, edit_sessions.owner_id
+        FROM edit_assets
+        JOIN edit_sessions ON edit_sessions.id = edit_assets.session_id
+        WHERE edit_assets.url = ?
+        LIMIT 1
+      `)
+      .get(assetURL) as AssetSessionRow | undefined;
   }
 
   markInFlightInterrupted() {
@@ -501,7 +584,7 @@ export class EditSessionStore {
     const now = new Date().toISOString();
 
     rows.forEach(({ session_id }) => {
-      const session = this.get(session_id);
+      const session = this.getAny(session_id);
 
       if (!session) {
         return;

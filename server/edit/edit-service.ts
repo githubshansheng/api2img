@@ -56,7 +56,12 @@ import {
   EditExecutor,
   type EditExecutionResult
 } from "./edit-executor";
-import { DEFAULT_WORKSPACE_ID, EditSessionStore } from "./edit-store";
+import {
+  DEFAULT_WORKSPACE_ID,
+  EditSessionStore,
+  LEGACY_EDIT_OWNER_ID
+} from "./edit-store";
+import type { EditVisitor } from "./edit-visitor";
 
 type RuntimeEditConfig = {
   endpointOverride?: EndpointOverride;
@@ -114,15 +119,18 @@ export class EditSessionService {
     this.store.markInFlightInterrupted();
   }
 
-  list(limit = 50) {
-    return this.store.list(limit);
+  list(limit = 50, ownerId = LEGACY_EDIT_OWNER_ID) {
+    return this.store.list(limit, ownerId);
   }
 
-  get(id: string) {
-    return this.requireSession(id);
+  get(id: string, ownerId = LEGACY_EDIT_OWNER_ID) {
+    return this.requireSession(id, ownerId);
   }
 
-  async create(input: CreateEditSessionRequest) {
+  async create(
+    input: CreateEditSessionRequest,
+    visitor: EditVisitor = legacyEditVisitor()
+  ) {
     validateCreateSessionRequest(input);
     const model = requireImageEditModel(input.modelId);
     const sessionId = crypto.randomUUID();
@@ -149,7 +157,7 @@ export class EditSessionService {
     const session: EditSession = {
       schemaVersion: 2,
       id: sessionId,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: visitor.workspaceId,
       title: input.title?.trim() || stripExtension(sourceAsset.name) || `修图会话 ${now.slice(0, 10)}`,
       status: "active",
       defaultModelId: model.id,
@@ -209,10 +217,10 @@ export class EditSessionService {
       updatedAt: now
     };
     appendAudit(session, "session.created", "创建修图会话", {
-      actorId: "local-owner"
+      actorId: visitor.ownerId
     });
 
-    this.store.save(session);
+    this.store.save(session, visitor.ownerId);
     this.emit("session.updated", session);
     return session;
   }
@@ -283,7 +291,11 @@ export class EditSessionService {
       input.candidateCount,
       model.editCapabilities.maxCandidates
     );
-    ensureWorkspaceQuota(this.store, candidateCount);
+    ensureWorkspaceQuota(
+      this.store,
+      candidateCount,
+      session.workspaceId ?? DEFAULT_WORKSPACE_ID
+    );
     const analysis = resolveEditInstructionAnalysis({
       instruction: input.originalInstruction,
       mode: input.mode,
@@ -784,8 +796,8 @@ export class EditSessionService {
     });
   }
 
-  getPlatformSnapshot(): EditPlatformSnapshot {
-    const workspace = this.store.getWorkspace();
+  getPlatformSnapshot(workspaceId = DEFAULT_WORKSPACE_ID): EditPlatformSnapshot {
+    const workspace = this.store.getWorkspace(workspaceId);
 
     return {
       workspace,
@@ -793,8 +805,11 @@ export class EditSessionService {
     };
   }
 
-  updateWorkspace(input: UpdateEditWorkspaceRequest) {
-    const workspace = this.store.getWorkspace();
+  updateWorkspace(
+    input: UpdateEditWorkspaceRequest,
+    workspaceId = DEFAULT_WORKSPACE_ID
+  ) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const now = new Date().toISOString();
 
     if (input.name !== undefined) {
@@ -819,8 +834,11 @@ export class EditSessionService {
     return this.store.saveWorkspace(workspace);
   }
 
-  upsertWorkspaceMember(input: UpsertEditWorkspaceMemberRequest) {
-    const workspace = this.store.getWorkspace();
+  upsertWorkspaceMember(
+    input: UpsertEditWorkspaceMemberRequest,
+    workspaceId = DEFAULT_WORKSPACE_ID
+  ) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const name = input.name?.trim();
 
     if (!name) {
@@ -851,8 +869,8 @@ export class EditSessionService {
     return this.store.saveWorkspace(workspace);
   }
 
-  removeWorkspaceMember(memberId: string) {
-    const workspace = this.store.getWorkspace();
+  removeWorkspaceMember(memberId: string, workspaceId = DEFAULT_WORKSPACE_ID) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const member = workspace.members.find((item) => item.id === memberId);
 
     if (!member) {
@@ -868,8 +886,11 @@ export class EditSessionService {
     return this.store.saveWorkspace(workspace);
   }
 
-  createInstructionTemplate(input: CreateEditInstructionTemplateRequest) {
-    const workspace = this.store.getWorkspace();
+  createInstructionTemplate(
+    input: CreateEditInstructionTemplateRequest,
+    workspaceId = DEFAULT_WORKSPACE_ID
+  ) {
+    const workspace = this.store.getWorkspace(workspaceId);
 
     if (workspace.templates.length >= IMAGE_EDIT_LIMITS.maxTemplates) {
       throw new EditSessionServiceError(409, "EDIT_TEMPLATE_LIMIT_EXCEEDED", "常用指令模板数量已达上限");
@@ -903,9 +924,10 @@ export class EditSessionService {
 
   updateInstructionTemplate(
     templateId: string,
-    input: UpdateEditInstructionTemplateRequest
+    input: UpdateEditInstructionTemplateRequest,
+    workspaceId = DEFAULT_WORKSPACE_ID
   ) {
-    const workspace = this.store.getWorkspace();
+    const workspace = this.store.getWorkspace(workspaceId);
     const template = workspace.templates.find((item) => item.id === templateId);
 
     if (!template) {
@@ -937,8 +959,11 @@ export class EditSessionService {
     return this.store.saveWorkspace(workspace);
   }
 
-  deleteInstructionTemplate(templateId: string) {
-    const workspace = this.store.getWorkspace();
+  deleteInstructionTemplate(
+    templateId: string,
+    workspaceId = DEFAULT_WORKSPACE_ID
+  ) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const before = workspace.templates.length;
     workspace.templates = workspace.templates.filter((item) => item.id !== templateId);
 
@@ -950,8 +975,12 @@ export class EditSessionService {
     return this.store.saveWorkspace(workspace);
   }
 
-  createBrandAsset(input: CreateEditBrandAssetRequest) {
-    const workspace = this.store.getWorkspace();
+  createBrandAsset(
+    input: CreateEditBrandAssetRequest,
+    ownerId = LEGACY_EDIT_OWNER_ID,
+    workspaceId = DEFAULT_WORKSPACE_ID
+  ) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const name = input.name?.trim();
     const assetURL = input.assetURL?.trim();
 
@@ -960,7 +989,7 @@ export class EditSessionService {
     }
 
     if (input.sessionId && input.versionId) {
-      const session = this.requireSession(input.sessionId);
+      const session = this.requireSession(input.sessionId, ownerId);
       requireVersion(session, input.versionId);
     }
 
@@ -981,8 +1010,8 @@ export class EditSessionService {
     return workspace;
   }
 
-  deleteBrandAsset(assetId: string) {
-    const workspace = this.store.getWorkspace();
+  deleteBrandAsset(assetId: string, workspaceId = DEFAULT_WORKSPACE_ID) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const before = workspace.brandAssets.length;
     workspace.brandAssets = workspace.brandAssets.filter((item) => item.id !== assetId);
 
@@ -1371,7 +1400,7 @@ export class EditSessionService {
 
   getSharedSession(token: string) {
     const access = this.getShareAccess(token);
-    const session = this.requireSession(access.sessionId);
+    const session = this.requireSessionAny(access.sessionId);
 
     return {
       permission: access.permission,
@@ -1387,7 +1416,7 @@ export class EditSessionService {
     const normalizedToken = token.trim();
     const now = Date.now();
 
-    for (const session of this.store.getAll()) {
+    for (const session of this.store.getAllAny()) {
       const link = session.shareLinks?.find(
         (item) =>
           item.token === normalizedToken &&
@@ -1508,12 +1537,12 @@ export class EditSessionService {
     });
   }
 
-  async runLifecycleCleanup() {
-    const workspace = this.store.getWorkspace();
+  async runLifecycleCleanup(workspaceId = DEFAULT_WORKSPACE_ID) {
+    const workspace = this.store.getWorkspace(workspaceId);
     const cutoff = Date.now() - workspace.lifecycle.detachedVersionRetentionDays * 86_400_000;
     let removedVersions = 0;
 
-    for (const session of this.store.getAll()) {
+    for (const session of this.store.getAllByWorkspace(workspaceId)) {
       const candidateIds = session.versions
         .filter(
           (version) =>
@@ -1549,7 +1578,7 @@ export class EditSessionService {
   }
 
   private buildPlatformMetrics(workspace: EditWorkspace): EditPlatformMetrics {
-    const sessions = this.store.getAll();
+    const sessions = this.store.getAllByWorkspace(workspace.id);
     const turns = sessions.flatMap((session) => session.turns);
     const jobs = sessions.flatMap((session) => session.jobs);
     const attempts = jobs.flatMap((job) => job.attempts);
@@ -1616,8 +1645,8 @@ export class EditSessionService {
     };
   }
 
-  async delete(id: string) {
-    const session = this.requireSession(id);
+  async delete(id: string, ownerId = LEGACY_EDIT_OWNER_ID) {
+    const session = this.requireSession(id, ownerId);
     const turnIds = session.turns.map((turn) => turn.id);
 
     if (this.deletingSessions.has(id)) {
@@ -1630,7 +1659,7 @@ export class EditSessionService {
     try {
       await this.scheduler.waitForSuiteIdle(id);
       await this.assets.deleteSessionAssets(id);
-      this.store.delete(id);
+      this.store.delete(id, ownerId);
       turnIds.forEach((turnId) => this.runtimeConfigs.delete(turnId));
       this.emitDeleted(id);
       this.listeners.delete(id);
@@ -1990,11 +2019,59 @@ export class EditSessionService {
     });
   }
 
-  private requireSession(id: string) {
-    const session = this.store.get(id);
+  authorizeAsset(
+    ownerId: string,
+    filename: string,
+    shareToken?: string
+  ) {
+    const asset = this.store.findAssetSession(
+      `${this.assets.publicBaseURL}/${encodeURIComponent(filename)}`
+    );
+
+    if (!asset) {
+      throw unavailableAssetError();
+    }
+
+    if (asset.owner_id === ownerId) {
+      return;
+    }
+
+    if (shareToken) {
+      try {
+        const access = this.getShareAccess(shareToken);
+
+        if (access.sessionId === asset.session_id) {
+          return;
+        }
+      } catch {
+        // Return the same response for missing and inaccessible assets.
+      }
+    }
+
+    throw unavailableAssetError();
+  }
+
+  private requireSession(id: string, ownerId?: string) {
+    const session = ownerId
+      ? this.store.get(id, ownerId)
+      : this.store.getAny(id);
 
     if (!session) {
       throw new EditSessionServiceError(404, "EDIT_SESSION_NOT_FOUND", "修图会话不存在");
+    }
+
+    return session;
+  }
+
+  private requireSessionAny(id: string) {
+    const session = this.store.getAny(id);
+
+    if (!session) {
+      throw new EditSessionServiceError(
+        404,
+        "EDIT_SESSION_NOT_FOUND",
+        "Edit session not found."
+      );
     }
 
     return session;
@@ -2272,9 +2349,13 @@ function clampInteger(
   return Math.min(maximum, Math.max(minimum, Math.floor(value)));
 }
 
-function ensureWorkspaceQuota(store: EditSessionStore, candidateCount: number) {
-  const workspace = store.getWorkspace();
-  const sessions = store.getAll();
+function ensureWorkspaceQuota(
+  store: EditSessionStore,
+  candidateCount: number,
+  workspaceId: string
+) {
+  const workspace = store.getWorkspace(workspaceId);
+  const sessions = store.getAllByWorkspace(workspaceId);
   const activeJobs = sessions
     .flatMap((session) => session.jobs)
     .filter((job) => ["queued", "running", "persisting"].includes(job.status))
@@ -2859,6 +2940,21 @@ function clampCandidateCount(value: number, modelLimit: number) {
   return Math.min(
     upperLimit,
     Math.max(IMAGE_EDIT_LIMITS.minCandidates, parsed)
+  );
+}
+
+function legacyEditVisitor(): EditVisitor {
+  return {
+    ownerId: LEGACY_EDIT_OWNER_ID,
+    workspaceId: DEFAULT_WORKSPACE_ID
+  };
+}
+
+function unavailableAssetError() {
+  return new EditSessionServiceError(
+    404,
+    "EDIT_ASSET_NOT_FOUND",
+    "Requested edit asset is unavailable."
   );
 }
 

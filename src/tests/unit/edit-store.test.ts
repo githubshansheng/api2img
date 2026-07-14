@@ -1,11 +1,16 @@
 import fs from "node:fs";
+import { createHmac, randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 import { EditAssetStore } from "../../../server/edit/edit-assets";
 import { EditSessionService } from "../../../server/edit/edit-service";
-import { EditSessionStore } from "../../../server/edit/edit-store";
+import {
+  EditSessionStore,
+  LEGACY_EDIT_OWNER_ID
+} from "../../../server/edit/edit-store";
 import { createEditImageInput } from "../helpers/image-editing";
 
 const temporaryDirectories: string[] = [];
@@ -17,6 +22,129 @@ afterEach(() => {
 });
 
 describe("edit session sqlite store", () => {
+  it("freezes sessions from schemas without anonymous visitor ownership", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "api2img-edit-store-"));
+    temporaryDirectories.push(directory);
+    const databasePath = path.join(directory, "edit-sessions.sqlite");
+    const database = new Database(databasePath);
+
+    database.exec(`
+      CREATE TABLE edit_sessions (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        default_model_id TEXT NOT NULL,
+        current_version_id TEXT NOT NULL,
+        current_branch_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        archived_at TEXT
+      );
+    `);
+    database.prepare(`
+      INSERT INTO edit_sessions (
+        id, title, status, default_model_id, current_version_id, current_branch_id,
+        created_at, updated_at, archived_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "legacy-session",
+      "Legacy session",
+      "active",
+      "gpt-image-2",
+      "legacy-version",
+      "legacy-branch",
+      "2026-07-01T00:00:00.000Z",
+      "2026-07-01T00:00:00.000Z",
+      null
+    );
+    database.close();
+
+    const store = new EditSessionStore(databasePath);
+
+    expect(store.get("legacy-session", "new-browser-owner")).toBeUndefined();
+    expect(store.list(10, "new-browser-owner")).toEqual([]);
+    expect(store.getAny("legacy-session")).toMatchObject({
+      id: "legacy-session",
+      workspaceId: "local-workspace"
+    });
+    expect(store.get("legacy-session")).toMatchObject({
+      id: "legacy-session"
+    });
+    store.close();
+  });
+
+  it("claims a frozen legacy session only for a verified visitor cookie", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "api2img-edit-store-"));
+    temporaryDirectories.push(directory);
+    const databasePath = path.join(directory, "edit-sessions.sqlite");
+    const store = new EditSessionStore(databasePath);
+    const ownerId = randomBytes(32).toString("base64url");
+    const secret = "legacy-claim-test-secret";
+    const signature = createHmac("sha256", secret)
+      .update(`v1.${ownerId}`)
+      .digest("base64url");
+    const cookie = `api2img_edit_visitor=v1.${ownerId}.${signature}`;
+    const sessionId = "legacy-claim-session";
+
+    store.close();
+    const database = new Database(databasePath);
+    database.prepare(`
+      INSERT INTO edit_sessions (
+        id, owner_id, workspace_id, title, status, default_model_id,
+        current_version_id, current_branch_id, created_at, updated_at, archived_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      sessionId,
+      LEGACY_EDIT_OWNER_ID,
+      "local-workspace",
+      "Frozen legacy session",
+      "active",
+      "gpt-image-2",
+      "legacy-version",
+      "legacy-branch",
+      "2026-07-01T00:00:00.000Z",
+      "2026-07-01T00:00:00.000Z",
+      null
+    );
+    database.close();
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.resolve(process.cwd(), "scripts", "claim-legacy-edit-session.mjs"),
+        "--database",
+        databasePath,
+        "--session",
+        sessionId,
+        "--cookie",
+        cookie
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          API2IMG_EDIT_SESSION_SECRET: secret
+        }
+      }
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`Claimed legacy edit session ${sessionId}.`);
+
+    const claimedStore = new EditSessionStore(databasePath);
+    expect(claimedStore.get(sessionId, ownerId)).toMatchObject({
+      id: sessionId,
+      workspaceId: `edit-workspace-${createHmac("sha256", secret)
+        .update(`workspace:${ownerId}`)
+        .digest("hex")
+        .slice(0, 32)}`
+    });
+    expect(claimedStore.get(sessionId, LEGACY_EDIT_OWNER_ID)).toBeUndefined();
+    claimedStore.close();
+  });
+
   it("hydrates schema v1 sessions and creates the v2 workspace defaults", async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "api2img-edit-store-"));
     temporaryDirectories.push(directory);

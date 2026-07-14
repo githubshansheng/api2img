@@ -32,6 +32,10 @@ import {
   EditSessionService,
   EditSessionServiceError
 } from "./edit-service";
+import {
+  createEditVisitorMiddleware,
+  requireEditVisitor
+} from "./edit-visitor";
 
 type AsyncRoute = (
   req: Request,
@@ -42,16 +46,32 @@ type AsyncRoute = (
 export function createEditSessionRouter(service: EditSessionService) {
   const router = express.Router();
 
-  router.use(
-    "/assets",
-    express.static(path.resolve(service.assets.rootDirectory), {
-      fallthrough: false,
-      immutable: false,
-      index: false,
-      maxAge: "1h",
-      redirect: false
-    })
-  );
+  router.use(createEditVisitorMiddleware());
+
+  router.get("/assets/:filename", (req, res, next) => {
+    const filename = routeParam(req, "filename");
+
+    if (!isSafeAssetFilename(filename)) {
+      next(new EditSessionServiceError(404, "EDIT_ASSET_NOT_FOUND", "Asset unavailable."));
+      return;
+    }
+
+    try {
+      service.authorizeAsset(
+        requireEditVisitor(req).ownerId,
+        filename,
+        readShareToken(req)
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.sendFile(filename, {
+        root: path.resolve(service.assets.rootDirectory),
+        dotfiles: "deny",
+        index: false
+      }, next);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.use((req, _res, next) => {
     const shareToken = readShareToken(req);
@@ -73,7 +93,10 @@ export function createEditSessionRouter(service: EditSessionService) {
     const requestedLimit = Number(req.query.limit ?? 50);
     sendSuccess(
       res,
-      service.list(Number.isFinite(requestedLimit) ? requestedLimit : 50)
+      service.list(
+        Number.isFinite(requestedLimit) ? requestedLimit : 50,
+        requireEditVisitor(req).ownerId
+      )
     );
   });
 
@@ -82,14 +105,20 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        await service.create(req.body as CreateEditSessionRequest),
+        await service.create(
+          req.body as CreateEditSessionRequest,
+          requireEditVisitor(req)
+        ),
         201
       );
     })
   );
 
-  router.get("/platform", (_req, res) => {
-    sendSuccess(res, service.getPlatformSnapshot());
+  router.get("/platform", (req, res) => {
+    sendSuccess(
+      res,
+      service.getPlatformSnapshot(requireEditVisitor(req).workspaceId)
+    );
   });
 
   router.patch(
@@ -97,7 +126,10 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        service.updateWorkspace(req.body as UpdateEditWorkspaceRequest)
+        service.updateWorkspace(
+          req.body as UpdateEditWorkspaceRequest,
+          requireEditVisitor(req).workspaceId
+        )
       );
     })
   );
@@ -108,7 +140,8 @@ export function createEditSessionRouter(service: EditSessionService) {
       sendSuccess(
         res,
         service.upsertWorkspaceMember(
-          req.body as UpsertEditWorkspaceMemberRequest
+          req.body as UpsertEditWorkspaceMemberRequest,
+          requireEditVisitor(req).workspaceId
         )
       );
     })
@@ -119,7 +152,10 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        service.removeWorkspaceMember(routeParam(req, "memberId"))
+        service.removeWorkspaceMember(
+          routeParam(req, "memberId"),
+          requireEditVisitor(req).workspaceId
+        )
       );
     })
   );
@@ -130,7 +166,8 @@ export function createEditSessionRouter(service: EditSessionService) {
       sendSuccess(
         res,
         service.createInstructionTemplate(
-          req.body as CreateEditInstructionTemplateRequest
+          req.body as CreateEditInstructionTemplateRequest,
+          requireEditVisitor(req).workspaceId
         ),
         201
       );
@@ -144,7 +181,8 @@ export function createEditSessionRouter(service: EditSessionService) {
         res,
         service.updateInstructionTemplate(
           routeParam(req, "templateId"),
-          req.body as UpdateEditInstructionTemplateRequest
+          req.body as UpdateEditInstructionTemplateRequest,
+          requireEditVisitor(req).workspaceId
         )
       );
     })
@@ -155,7 +193,10 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        service.deleteInstructionTemplate(routeParam(req, "templateId"))
+        service.deleteInstructionTemplate(
+          routeParam(req, "templateId"),
+          requireEditVisitor(req).workspaceId
+        )
       );
     })
   );
@@ -165,7 +206,11 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        service.createBrandAsset(req.body as CreateEditBrandAssetRequest),
+        service.createBrandAsset(
+          req.body as CreateEditBrandAssetRequest,
+          requireEditVisitor(req).ownerId,
+          requireEditVisitor(req).workspaceId
+        ),
         201
       );
     })
@@ -176,7 +221,10 @@ export function createEditSessionRouter(service: EditSessionService) {
     asyncRoute(async (req, res) => {
       sendSuccess(
         res,
-        service.deleteBrandAsset(routeParam(req, "assetId"))
+        service.deleteBrandAsset(
+          routeParam(req, "assetId"),
+          requireEditVisitor(req).workspaceId
+        )
       );
     })
   );
@@ -200,8 +248,11 @@ export function createEditSessionRouter(service: EditSessionService) {
 
   router.post(
     "/platform/lifecycle/cleanup",
-    asyncRoute(async (_req, res) => {
-      sendSuccess(res, await service.runLifecycleCleanup());
+    asyncRoute(async (req, res) => {
+      sendSuccess(
+        res,
+        await service.runLifecycleCleanup(requireEditVisitor(req).workspaceId)
+      );
     })
   );
 
@@ -209,12 +260,26 @@ export function createEditSessionRouter(service: EditSessionService) {
     sendSuccess(res, service.getSharedSession(routeParam(req, "token")));
   });
 
+  router.use("/:id", (req, _res, next) => {
+    if (readShareToken(req)) {
+      next();
+      return;
+    }
+
+    try {
+      service.get(routeParam(req, "id"), requireEditVisitor(req).ownerId);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/:id/events", (req, res, next) => {
     try {
       const shareToken = readShareToken(req);
       const session = shareToken
         ? service.getSharedSession(shareToken).session
-        : service.get(routeParam(req, "id"));
+        : service.get(routeParam(req, "id"), requireEditVisitor(req).ownerId);
       res.status(200);
       res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -274,7 +339,7 @@ export function createEditSessionRouter(service: EditSessionService) {
       res,
       shareToken
         ? service.getSharedSession(shareToken).session
-        : service.get(routeParam(req, "id"))
+        : service.get(routeParam(req, "id"), requireEditVisitor(req).ownerId)
     );
   });
 
@@ -522,7 +587,7 @@ export function createEditSessionRouter(service: EditSessionService) {
     "/:id",
     asyncRoute(async (req, res) => {
       const id = routeParam(req, "id");
-      await service.delete(id);
+      await service.delete(id, requireEditVisitor(req).ownerId);
       sendSuccess(res, { id, deleted: true });
     })
   );
@@ -565,6 +630,11 @@ function sendSuccess<T>(res: Response, data: T, statusCode = 200) {
 function routeParam(req: Request, name: string) {
   const value = req.params[name];
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function isSafeAssetFilename(value: string) {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) &&
+    value === path.basename(value);
 }
 
 function readShareToken(req: Request) {

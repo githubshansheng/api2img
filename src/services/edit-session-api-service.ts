@@ -464,7 +464,12 @@ export function subscribeEditSessionEvents(
   source.onopen = () => handlers.onOpen?.();
   source.onmessage = (message) => {
     try {
-      handlers.onEvent(JSON.parse(message.data) as EditSessionEvent);
+      handlers.onEvent(
+        attachShareTokenToEditAssetUrls(
+          JSON.parse(message.data) as EditSessionEvent,
+          shareToken
+        )
+      );
     } catch {
       handlers.onError?.();
     }
@@ -509,7 +514,7 @@ async function requestEditApi<T>(
     );
   }
 
-  return body.data;
+  return attachShareTokenToEditAssetUrls(body.data, shareToken);
 }
 
 function resolveActiveShareToken() {
@@ -521,4 +526,44 @@ function resolveActiveShareToken() {
     new URLSearchParams(window.location.search).get("share")?.trim() ||
     undefined
   );
+}
+
+function attachShareTokenToEditAssetUrls<T>(value: T, shareToken?: string): T {
+  if (!shareToken) {
+    return value;
+  }
+
+  return rewriteEditAssetUrls(value, shareToken);
+}
+
+function rewriteEditAssetUrls<T>(value: T, shareToken: string): T {
+  if (typeof value === "string") {
+    return appendShareTokenToEditAssetUrl(value, shareToken) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteEditAssetUrls(item, shareToken)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        rewriteEditAssetUrls(item, shareToken)
+      ])
+    ) as T;
+  }
+
+  return value;
+}
+
+function appendShareTokenToEditAssetUrl(value: string, shareToken: string) {
+  const assetPrefix = `${EDIT_API_BASE}/assets/`;
+
+  if (!value.startsWith(assetPrefix)) {
+    return value;
+  }
+
+  const separator = value.includes("?") ? "&" : "?";
+  return `${value}${separator}shareToken=${encodeURIComponent(shareToken)}`;
 }
