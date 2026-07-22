@@ -120,6 +120,61 @@ describe("image adapters", () => {
     expect(body.quality).toBe("high");
   });
 
+  it("keeps gpt-image-2 16:9 sizes exact across every resolution tier", () => {
+    const model = getModelById("gpt-image-2")!;
+    const expectedSizes = {
+      "0.5K": "1280x720",
+      "1K": "1536x864",
+      "2K": "2048x1152",
+      "4K": "3840x2160"
+    } as const;
+
+    Object.entries(expectedSizes).forEach(([resolution, expectedSize]) => {
+      const draft = createDraft("gpt-image-2", {
+        params: {
+          ...createDefaultGenerationParams(model),
+          ratio: "16:9",
+          resolution: resolution as keyof typeof expectedSizes
+        }
+      });
+      const request = openAIImageAdapter.buildRequest(draft);
+      const body = request.body as Record<string, unknown>;
+
+      expect(body.size).toBe(expectedSize);
+    });
+  });
+
+  it("builds valid exact gpt-image-2 sizes for all enabled ratio and resolution combinations", () => {
+    const model = getModelById("gpt-image-2")!;
+    const ratios = model.capabilities.ratios.filter((option) => option.enabled && option.key !== "auto");
+    const resolutions = model.capabilities.resolutions.filter(
+      (option) => option.enabled && option.key !== "auto"
+    );
+
+    ratios.forEach((ratio) => {
+      resolutions.forEach((resolution) => {
+        const draft = createDraft("gpt-image-2", {
+          params: {
+            ...createDefaultGenerationParams(model),
+            ratio: ratio.key,
+            resolution: resolution.key
+          }
+        });
+        const body = openAIImageAdapter.buildRequest(draft).body as Record<string, unknown>;
+        const [width, height] = String(body.size).split("x").map(Number);
+        const requestedAspectRatio = ratio.widthRatio! / ratio.heightRatio!;
+
+        expect(width % 16).toBe(0);
+        expect(height % 16).toBe(0);
+        expect(width * height).toBeGreaterThanOrEqual(655_360);
+        expect(width * height).toBeLessThanOrEqual(8_294_400);
+        expect(Math.max(width, height)).toBeLessThanOrEqual(3_840);
+        expect(Math.max(width / height, height / width)).toBeLessThanOrEqual(3);
+        expect(width / height).toBeCloseTo(requestedAspectRatio, 8);
+      });
+    });
+  });
+
   it("summarizes the actual adapter request model name", () => {
     const baseModel = getModelById("gpt-image-2")!;
     const model: ModelConfig = {
@@ -158,7 +213,7 @@ describe("image adapters", () => {
     expect(body.prompt).not.toContain("审核强度");
     expect(body.prompt).not.toContain("响应格式");
     expect(body.n).toBe(3);
-    expect(body.size).toBe("1024x1536");
+    expect(body.size).toBe("864x1536");
     expect(body.output_format).toBe("webp");
     expect(body.output_compression).toBe(80);
     expect(body.background).toBe("opaque");

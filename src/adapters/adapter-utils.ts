@@ -156,6 +156,10 @@ export function ratioToOpenAISize(draft: GenerationRequestDraft) {
     return undefined;
   }
 
+  if (isGptImage2Model(draft.model)) {
+    return sizeForGptImage2(draft.params.resolution, draft.params.ratio);
+  }
+
   return sizeForResolutionAndOrientation(draft.params.resolution, orientationForRatio(draft.params.ratio));
 }
 
@@ -682,6 +686,88 @@ function orientationForRatio(ratio: GenerationRequestDraft["params"]["ratio"]) {
   const [width, height] = ratio.split(":").map(Number);
 
   return width < height ? "portrait" : "landscape";
+}
+
+const GPT_IMAGE_2_MIN_PIXELS = 655_360;
+const GPT_IMAGE_2_MAX_PIXELS = 8_294_400;
+const GPT_IMAGE_2_MAX_EDGE = 3_840;
+const GPT_IMAGE_2_MAX_ASPECT_RATIO = 3;
+
+function isGptImage2Model(model: ModelConfig) {
+  return [model.id, model.apiModelName].some((value) => {
+    const normalized = value.trim().toLowerCase();
+
+    return normalized === "gpt-image-2" || normalized.startsWith("gpt-image-2-");
+  });
+}
+
+function sizeForGptImage2(
+  resolution: GenerationRequestDraft["params"]["resolution"],
+  ratio: GenerationRequestDraft["params"]["ratio"]
+) {
+  const resolvedRatio = ratio === "auto" ? "1:1" : ratio;
+  const [rawWidthRatio, rawHeightRatio] = resolvedRatio.split(":").map(Number);
+
+  if (!rawWidthRatio || !rawHeightRatio) {
+    return undefined;
+  }
+
+  const aspectRatio = Math.max(rawWidthRatio / rawHeightRatio, rawHeightRatio / rawWidthRatio);
+
+  if (aspectRatio > GPT_IMAGE_2_MAX_ASPECT_RATIO) {
+    return undefined;
+  }
+
+  const divisor = greatestCommonDivisor(rawWidthRatio, rawHeightRatio);
+  const widthStep = 16 * (rawWidthRatio / divisor);
+  const heightStep = 16 * (rawHeightRatio / divisor);
+  const longStep = Math.max(widthStep, heightStep);
+  const shortStep = Math.min(widthStep, heightStep);
+  const resolvedResolution = resolution === "auto" ? "1K" : resolution;
+  let multiplier: number;
+
+  if (resolvedResolution === "0.5K") {
+    multiplier = Math.ceil(Math.sqrt(GPT_IMAGE_2_MIN_PIXELS / (widthStep * heightStep)));
+  } else if (resolvedResolution === "1K") {
+    const targetShortEdgeMultiplier = Math.max(1, Math.round(1024 / shortStep));
+    const standardLongEdgeMultiplier = Math.max(1, Math.floor(1536 / longStep));
+    multiplier = Math.min(targetShortEdgeMultiplier, standardLongEdgeMultiplier);
+  } else if (resolvedResolution === "2K") {
+    multiplier = Math.max(1, Math.floor(2048 / longStep));
+  } else {
+    const edgeMultiplier = Math.max(1, Math.floor(GPT_IMAGE_2_MAX_EDGE / longStep));
+    const pixelMultiplier = Math.max(
+      1,
+      Math.floor(Math.sqrt(GPT_IMAGE_2_MAX_PIXELS / (widthStep * heightStep)))
+    );
+    multiplier = Math.min(edgeMultiplier, pixelMultiplier);
+  }
+
+  const width = widthStep * multiplier;
+  const height = heightStep * multiplier;
+  const pixels = width * height;
+
+  if (
+    width > GPT_IMAGE_2_MAX_EDGE ||
+    height > GPT_IMAGE_2_MAX_EDGE ||
+    pixels < GPT_IMAGE_2_MIN_PIXELS ||
+    pixels > GPT_IMAGE_2_MAX_PIXELS
+  ) {
+    return undefined;
+  }
+
+  return `${width}x${height}`;
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+
+  while (b !== 0) {
+    [a, b] = [b, a % b];
+  }
+
+  return a || 1;
 }
 
 function sizeForResolutionAndOrientation(

@@ -64,4 +64,16 @@ describe("model capability resolution", () => {
     expect(defaultParams.count).toBe(1);
     expect(defaultParams.responseFormat).toBe("b64_json");
   });
+
+  it("disables gpt-image-2 ratios outside the supported 3:1 range", () => {
+    const model = getModelById("gpt-image-2")!;
+    const resolved = resolveModelCapabilities(model);
+
+    expect(resolved.ratios.find((option) => option.key === "16:9")?.enabled).toBe(true);
+    expect(resolved.ratios.find((option) => option.key === "21:9")?.enabled).toBe(true);
+    expect(resolved.ratios.find((option) => option.key === "4:1")?.enabled).toBe(false);
+    expect(resolved.ratios.find((option) => option.key === "1:4")?.enabled).toBe(false);
+    expect(resolved.ratios.find((option) => option.key === "8:1")?.enabled).toBe(false);
+    expect(resolved.ratios.find((option) => option.key === "1:8")?.enabled).toBe(false);
+  });
 });

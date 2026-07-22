@@ -77,8 +77,23 @@ type ModelSeed = {
   supportsTransparentBackground?: boolean;
 };
 
-function cloneRatios() {
-  return ratioOptions.map((option) => ({ ...option }));
+function cloneRatios(maxAspectRatio?: number) {
+  return ratioOptions.map((option) => {
+    if (
+      maxAspectRatio &&
+      option.widthRatio &&
+      option.heightRatio &&
+      Math.max(option.widthRatio / option.heightRatio, option.heightRatio / option.widthRatio) > maxAspectRatio
+    ) {
+      return {
+        ...option,
+        enabled: false,
+        disabledReason: `当前模型仅支持不超过 ${maxAspectRatio}:1 的画幅比例`
+      };
+    }
+
+    return { ...option };
+  });
 }
 
 function cloneResolutions(disableHighResolution = false) {
@@ -212,7 +227,7 @@ function createModel(seed: ModelSeed): ModelConfig {
       chargeOnFailureRisk: true
     },
     capabilities: {
-      ratios: cloneRatios(),
+      ratios: cloneRatios(seed.id === "gpt-image-2" ? 3 : undefined),
       resolutions: cloneResolutions(!supportsHighResolution),
       qualities: isGemini ? autoQualityOnly.map((option) => ({ ...option })) : basicQualities.map((option) => ({ ...option })),
       maxOutputs: seed.maxOutputs,
