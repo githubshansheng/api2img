@@ -1,0 +1,35 @@
+{
+  "requestId": "ac65b1cd-f851-4279-8fab-db39169643c3",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2182836,
+    "sha256": "87b6ef7e93adacecd006fc460bb9a1783549a7a968eda06a4d7c86cccde8cd00"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 19496,
+    "sha256": "ada4db8ca5a41e630bd29817f645112cde99a6282d38eb0bfb733efffd80be1d"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 100572,
+    "sha256": "ba2dd72b810f217b2cfde2f4290a5da6c0fbfb61749ae8f77384c43260b0421a"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "user_prompt": "生成物理相机绕同一现实厨房场景向右环绕90度后的照片。场景变换集合只包含相机轨道；风扇整体及其机头、支柱、底座和所有厨房物件采用与目标相机方向无关的恒定世界装配变换。相机到达厨房侧方后重新投影整幅画面：风扇网罩形成严格薄侧向投影并显露前后厚度；桌沿、果盘、玻璃杯、杂志、窗户、台面电器、橱柜和冰箱形成与新相机位置一致的分层视差、水平位移、遮挡与出入画变化。背景保持原图正面排列或只改变风扇局部投影均不满足目标。Roll为0度。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "C:\\Users\\Administrator\\.codex\\attachments\\e2951585-d3eb-47a8-bf74-de1a125effcb\\image-2.png"
+}

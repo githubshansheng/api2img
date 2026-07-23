@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.28,
+    "subjectHeightRatioApprox": 0.28,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": false,
+    "identityGeometryPass": true
+  },
+  "reason": "Three semantic references improved identity retention and kept the fan fixed in world space, but the full-scene first input dominated the output framing and reduced the fan to a long shot."
+}

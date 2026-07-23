@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.29,
+    "subjectHeightRatioApprox": 0.48,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": true,
+    "identityGeometryPass": true
+  },
+  "reason": "The fixed-world camera protocol, clean distance-10 projection guide, and calibrated framing produced a valid +75-degree elevated view with medium-shot scale."
+}

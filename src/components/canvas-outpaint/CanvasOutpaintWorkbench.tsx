@@ -7,13 +7,15 @@ import {
   Download,
   ImagePlus,
   LoaderCircle,
+  Maximize2,
   Orbit,
   Rotate3D,
   RotateCcw,
   Settings2,
   Sparkles,
   Upload,
-  View
+  View,
+  X
 } from "lucide-react";
 import {
   useCallback,
@@ -30,18 +32,22 @@ import {
   clampSingleImageCameraDistance,
   clampSingleImageRotationAngle,
   DEFAULT_SINGLE_IMAGE_IMAGE_MODEL,
+  DEFAULT_SINGLE_IMAGE_PROMPT_LANGUAGE,
   DEFAULT_SINGLE_IMAGE_REASONING_MODEL,
+  DEFAULT_SINGLE_IMAGE_USER_PROMPT_EN,
+  DEFAULT_SINGLE_IMAGE_USER_PROMPT_ZH,
   normalizeSingleImageRotationAngle,
   SINGLE_IMAGE_CAMERA_DISTANCE_DEFAULT,
-  SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER,
-  type SingleImageViewpointAnalysis,
+  type SingleImagePromptLanguage,
   type SingleImageViewpointResult,
   type XYZRotation
 } from "../../domain";
 import {
   generateSingleImageViewpoint,
+  isCurrentSingleImageCameraProtocol,
   SingleImageViewpointApiError
 } from "../../services/single-image-viewpoint-service";
+import { openFrontendDebugPanel } from "../../services/debug-log-service";
 import {
   SingleImagePoseViewport,
   type SingleImagePoseViewportHandle
@@ -51,8 +57,8 @@ const DEFAULT_BASE_URL = "https://api.openai.com";
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const ZERO_ROTATION: XYZRotation = { x: 0, y: 0, z: 0 };
-const DEFAULT_VIEW_CONSTRAINT_ZH =
-  "保持同一主体身份、同一时刻的关节或零件关系、材质、光线与原始场景。XYZ 控制相机围绕主体移动，必须按锁定机位重建新的屏幕朝向、轮廓、可见结构与遮挡；必要时从正面变为侧面、背面、俯视或仰视。禁止的只是新增无关动作或重排零件，不禁止相机运动产生的新投影。";
+const PRIMARY_PROMPT_LANGUAGE = DEFAULT_SINGLE_IMAGE_PROMPT_LANGUAGE;
+const PROMPT_LANGUAGES = [PRIMARY_PROMPT_LANGUAGE, "zh"] as const;
 
 type CanvasOutpaintWorkbenchProps = {
   apiKey?: string;
@@ -96,7 +102,7 @@ const AXES: Array<{
     key: "y",
     label: "Y",
     name: "偏航 Yaw",
-    description: "正值向主体右侧环绕，补全侧面与背面"
+    description: "正值：镜头向画面左边移动，即对象自身右边"
   },
   {
     key: "z",
@@ -111,8 +117,8 @@ const VIEW_PRESETS: Array<{
   rotation: XYZRotation;
 }> = [
   { label: "正面", rotation: { x: 0, y: 0, z: 0 } },
-  { label: "右前 45°", rotation: { x: 0, y: 45, z: 0 } },
-  { label: "右侧 90°", rotation: { x: 0, y: 90, z: 0 } },
+  { label: "对象右前 45°", rotation: { x: 0, y: 45, z: 0 } },
+  { label: "对象右侧 90°", rotation: { x: 0, y: 90, z: 0 } },
   { label: "背面 180°", rotation: { x: 0, y: 180, z: 0 } }
 ];
 
@@ -139,9 +145,11 @@ export function CanvasOutpaintWorkbench({
     SINGLE_IMAGE_CAMERA_DISTANCE_DEFAULT
   );
   const [guidePreview, setGuidePreview] = useState("");
-  const [prompt, setPrompt] = useState(DEFAULT_VIEW_CONSTRAINT_ZH);
-  const [reasoningModel, setReasoningModel] = useState(
-    DEFAULT_SINGLE_IMAGE_REASONING_MODEL
+  const [promptZh, setPromptZh] = useState(
+    DEFAULT_SINGLE_IMAGE_USER_PROMPT_ZH
+  );
+  const [promptEn, setPromptEn] = useState(
+    DEFAULT_SINGLE_IMAGE_USER_PROMPT_EN
   );
   const [imageModel, setImageModel] = useState(
     DEFAULT_SINGLE_IMAGE_IMAGE_MODEL
@@ -153,14 +161,50 @@ export function CanvasOutpaintWorkbench({
   const [outputSize, setOutputSize] = useState("2048x2048");
   const [stage, setStage] = useState<WorkbenchStage>("idle");
   const [stageMessage, setStageMessage] = useState("");
-  const [analysis, setAnalysis] = useState<SingleImageViewpointAnalysis>();
-  const [result, setResult] = useState<SingleImageViewpointResult>();
-  const [renderPrompt, setRenderPrompt] = useState("");
+  const [results, setResults] = useState<
+    Partial<Record<SingleImagePromptLanguage, SingleImageViewpointResult>>
+  >({});
+  const [renderPrompts, setRenderPrompts] = useState<
+    Partial<Record<SingleImagePromptLanguage, string>>
+  >({});
+  const [resultsStale, setResultsStale] = useState(false);
+  const [detailLanguage, setDetailLanguage] =
+    useState<SingleImagePromptLanguage>();
   const [error, setError] = useState("");
   const cameraPrompt = useMemo(
-    () => buildSingleImageCameraPrompt(rotation, cameraDistance),
-    [cameraDistance, rotation.x, rotation.y, rotation.z]
+    () =>
+      buildSingleImageCameraPrompt(rotation, cameraDistance, {
+        sourceWidth: source?.width,
+        sourceHeight: source?.height,
+        outputSize
+      }),
+    [
+      cameraDistance,
+      outputSize,
+      rotation.x,
+      rotation.y,
+      rotation.z,
+      source?.height,
+      source?.width
+    ]
   );
+  const invalidResultLanguages = PROMPT_LANGUAGES.filter((language) => {
+    const result = results[language];
+    const renderPrompt = renderPrompts[language];
+
+    return Boolean(
+      result &&
+        renderPrompt &&
+        !isCurrentSingleImageCameraProtocol({
+          cameraPrompt: result.cameraPrompt,
+          renderPrompt,
+          promptLanguage: language
+        })
+    );
+  });
+  const detailResult = detailLanguage
+    ? results[detailLanguage]
+    : undefined;
 
   const captureGuidePreview = useCallback(() => {
     if (!poseReady || !source || !viewportRef.current) {
@@ -187,22 +231,49 @@ export function CanvasOutpaintWorkbench({
   }, [defaultEditURL]);
 
   useEffect(() => {
-    if (
-      !renderPrompt ||
-      renderPrompt.includes(SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER)
-    ) {
+    if (invalidResultLanguages.length === 0) {
       return;
     }
 
-    setRenderPrompt("");
-    setResult(undefined);
-    setAnalysis(undefined);
+    setRenderPrompts((current) =>
+      omitPromptLanguages(current, invalidResultLanguages)
+    );
+    setResults((current) =>
+      omitPromptLanguages(current, invalidResultLanguages)
+    );
+    setStage("failed");
+    setStageMessage("检测到不兼容的服务端提示词，已移除对应结果");
+    setError(
+      `以下结果未通过 10.6 相机协议校验：${invalidResultLanguages
+        .map((language) => (language === "en" ? "英文" : "中文"))
+        .join("、")}`
+    );
+  }, [
+    invalidResultLanguages.join(",")
+  ]);
 
-    if (stage !== "reasoning" && stage !== "rendering") {
-      setStage("idle");
-      setStageMessage("检测到旧版提示词，已清除，请按当前目标机位重新生成");
+  useEffect(() => {
+    if (!detailLanguage || results[detailLanguage]) {
+      return;
     }
-  }, [renderPrompt, stage]);
+
+    setDetailLanguage(undefined);
+  }, [detailLanguage, results.en, results.zh]);
+
+  useEffect(() => {
+    if (!detailLanguage) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDetailLanguage(undefined);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [detailLanguage]);
 
   useEffect(() => {
     if (guidePreviewTimerRef.current !== null) {
@@ -284,9 +355,10 @@ export function CanvasOutpaintWorkbench({
       setRotation(ZERO_ROTATION);
       setCameraDistance(SINGLE_IMAGE_CAMERA_DISTANCE_DEFAULT);
       setGuidePreview("");
-      setResult(undefined);
-      setAnalysis(undefined);
-      setRenderPrompt("");
+      setResults({});
+      setRenderPrompts({});
+      setResultsStale(false);
+      setDetailLanguage(undefined);
       setStage("idle");
       setStageMessage("");
       setOutputSize(
@@ -342,9 +414,22 @@ export function CanvasOutpaintWorkbench({
     setCameraDistance(clampSingleImageCameraDistance(value));
   }
 
-  function updateUserPrompt(value: string) {
+  function updateOutputSize(value: string) {
     invalidateGeneratedOutput();
-    setPrompt(value);
+    setOutputSize(value);
+  }
+
+  function updateUserPrompt(
+    language: SingleImagePromptLanguage,
+    value: string
+  ) {
+    invalidateGeneratedOutput();
+
+    if (language === "en") {
+      setPromptEn(value);
+    } else {
+      setPromptZh(value);
+    }
   }
 
   function resetPose() {
@@ -354,9 +439,11 @@ export function CanvasOutpaintWorkbench({
   }
 
   function invalidateGeneratedOutput() {
-    setResult(undefined);
-    setAnalysis(undefined);
-    setRenderPrompt("");
+    const hasRetainedResults = Boolean(results.en || results.zh);
+
+    if (hasRetainedResults) {
+      setResultsStale(true);
+    }
 
     if (
       stage === "success" ||
@@ -364,7 +451,11 @@ export function CanvasOutpaintWorkbench({
       stage === "cancelled"
     ) {
       setStage("idle");
-      setStageMessage("参数已更新，等待重新生成");
+      setStageMessage(
+        hasRetainedResults
+          ? "相机或生成参数已更新，上一机位结果已保留"
+          : "参数已更新，等待重新生成"
+      );
       setError("");
     }
   }
@@ -380,11 +471,10 @@ export function CanvasOutpaintWorkbench({
       return;
     }
 
-    const normalizedReasoningModel = reasoningModel.trim();
     const normalizedImageModel = imageModel.trim();
 
-    if (!normalizedReasoningModel || !normalizedImageModel) {
-      setError("空间推理模型和图像模型不能为空。");
+    if (!normalizedImageModel) {
+      setError("图像模型不能为空。");
       return;
     }
 
@@ -408,71 +498,65 @@ export function CanvasOutpaintWorkbench({
     const controller = new AbortController();
     requestAbortRef.current = controller;
     setError("");
-    setResult(undefined);
-    setAnalysis(undefined);
-    setRenderPrompt("");
+    if (results.en || results.zh) {
+      setResultsStale(true);
+    }
     setStage("reasoning");
     setStageMessage(
-      `${normalizedReasoningModel} 正在识别主体并推导目标视角的隐藏表面`
+      `${DEFAULT_SINGLE_IMAGE_REASONING_MODEL} 正在共享分析原图、目标投影与完整机位图`
     );
 
     try {
-      const nextResult = await generateSingleImageViewpoint(
-        {
-          requestId: createRequestId(),
-          source_image: source.dataURL,
-          pose_guide_image: guide.image,
-          camera_pose_image: guide.cameraViewImage,
-          rotation_degrees: rotation,
-          camera_distance: cameraDistance,
-          user_prompt: prompt.trim(),
-          background_mode: "preserve_scene",
-          api_key: apiKey,
-          reasoning_model: normalizedReasoningModel,
-          image_model: normalizedImageModel,
-          output_size: outputSize,
-          endpoint_override: {
-            baseURL: apiBaseURL.trim() || DEFAULT_BASE_URL,
-            editURL: imageEditURL.trim() || undefined
-          }
-        },
-        {
-          onStage: (
-            nextStage,
-            message,
-            nextAnalysis,
-            _nextCameraPrompt,
-            nextRenderPrompt
-          ) => {
-            if (requestAbortRef.current !== controller) {
-              return;
-            }
+      const settledResults = await Promise.allSettled(
+        PROMPT_LANGUAGES.map((language) =>
+          generateSingleImageViewpoint(
+            {
+              requestId: `${createRequestId()}-${language}`,
+              source_image: source.dataURL,
+              pose_guide_image: guide.image,
+              camera_pose_image: guide.cameraViewImage,
+              rotation_degrees: rotation,
+              camera_distance: cameraDistance,
+              source_width: source.width,
+              source_height: source.height,
+              prompt_language: language,
+              user_prompt:
+                language === "en" ? promptEn.trim() : promptZh.trim(),
+              background_mode: "preserve_scene",
+              api_key: apiKey,
+              reasoning_model: DEFAULT_SINGLE_IMAGE_REASONING_MODEL,
+              image_model: normalizedImageModel,
+              output_size: outputSize,
+              endpoint_override: {
+                baseURL: apiBaseURL.trim() || DEFAULT_BASE_URL,
+                editURL: imageEditURL.trim() || undefined
+              }
+            },
+            {
+              onStage: (
+                nextStage,
+                message,
+                _nextAnalysis,
+                _nextCameraPrompt,
+                nextRenderPrompt,
+                nextPromptLanguage
+              ) => {
+                if (requestAbortRef.current !== controller) {
+                  return;
+                }
 
-            setStage(nextStage);
-            setStageMessage(message);
+                setStage(nextStage);
+                setStageMessage(message);
 
-            if (nextAnalysis) {
-              setAnalysis(nextAnalysis);
-            }
-
-            if (nextRenderPrompt) {
-              setRenderPrompt(nextRenderPrompt);
-            }
-          }
-        },
-        controller.signal
+                void nextRenderPrompt;
+                void nextPromptLanguage;
+              }
+            },
+            controller.signal
+          )
+        )
       );
 
-      if (requestAbortRef.current !== controller) {
-        return;
-      }
-
-      setResult(nextResult);
-      setAnalysis(nextResult);
-      setRenderPrompt(nextResult.renderPrompt);
-      setStage("success");
-      setStageMessage("目标视角已完成完整画幅重绘");
-    } catch (requestError) {
       if (requestAbortRef.current !== controller) {
         return;
       }
@@ -483,8 +567,54 @@ export function CanvasOutpaintWorkbench({
         return;
       }
 
+      const nextResults: Partial<
+        Record<SingleImagePromptLanguage, SingleImageViewpointResult>
+      > = {};
+      const nextPrompts: Partial<
+        Record<SingleImagePromptLanguage, string>
+      > = {};
+      const failures: string[] = [];
+
+      settledResults.forEach((settled, index) => {
+        const language = PROMPT_LANGUAGES[index]!;
+
+        if (settled.status === "fulfilled") {
+          nextResults[language] = settled.value;
+          nextPrompts[language] = settled.value.renderPrompt;
+        } else {
+          failures.push(
+            `${language === "en" ? "英文" : "中文"}：${formatRequestError(settled.reason)}`
+          );
+        }
+      });
+
+      const completedCount = Object.keys(nextResults).length;
+
+      if (completedCount > 0) {
+        setResults(nextResults);
+        setRenderPrompts(nextPrompts);
+        setResultsStale(false);
+      }
+
+      if (failures.length === 0) {
+        setStage("success");
+        setStageMessage("英文主结果与中文对照均已完成");
+      } else if (Object.keys(nextResults).length > 0) {
+        setStage("failed");
+        setStageMessage("双语对比仅部分完成");
+        setError(failures.join("\n"));
+      } else {
+        setStage("failed");
+        setStageMessage("中文与英文新视角生成均失败");
+        setError(failures.join("\n"));
+      }
+    } catch (requestError) {
+      if (requestAbortRef.current !== controller) {
+        return;
+      }
+
       setStage("failed");
-      setStageMessage("新视角生成失败");
+      setStageMessage("双语新视角生成失败");
       setError(formatRequestError(requestError));
     } finally {
       if (requestAbortRef.current === controller) {
@@ -524,15 +654,31 @@ export function CanvasOutpaintWorkbench({
             <span>2D 目标投影引导 + AI 新视角重建</span>
           </div>
         </div>
-        <div className="single-view-pipeline-route" aria-label="双模型处理链">
+        <div className="single-view-pipeline-route" aria-label="新机位生成链">
           <span className="is-ready">XYZ 机位</span>
           <i />
-          <span className={stage === "reasoning" ? "is-active" : ""}>
-            {reasoningModel || DEFAULT_SINGLE_IMAGE_REASONING_MODEL}
+          <span
+            className={
+              stage === "reasoning"
+                ? "is-active"
+                : stage === "rendering" || stage === "success"
+                  ? "is-ready"
+                  : ""
+            }
+          >
+            {DEFAULT_SINGLE_IMAGE_REASONING_MODEL} 视觉分析
           </span>
           <i />
-          <span className={stage === "rendering" ? "is-active" : ""}>
-            {imageModel || DEFAULT_SINGLE_IMAGE_IMAGE_MODEL}
+          <span
+            className={
+              stage === "rendering"
+                ? "is-active"
+                : stage === "success"
+                  ? "is-ready"
+                  : ""
+            }
+          >
+            {imageModel || DEFAULT_SINGLE_IMAGE_IMAGE_MODEL} 整场景重拍
           </span>
         </div>
         <div className={`single-view-live-state status-${stage}`}>
@@ -599,7 +745,7 @@ export function CanvasOutpaintWorkbench({
               >
                 <ImagePlus size={22} />
                 <span>
-                  <strong>拖入或选择一张主体参考图</strong>
+                  <strong>拖入或选择一张场景参考图</strong>
                   <small>PNG、JPEG、WebP，最大 20 MB</small>
                 </span>
               </button>
@@ -647,8 +793,12 @@ export function CanvasOutpaintWorkbench({
               </div>
             </div>
             <PromptToolIsland
-              cameraPrompt={cameraPrompt.deterministicPromptZh}
-              renderPrompt={renderPrompt}
+              cameraPrompts={{
+                zh: cameraPrompt.deterministicPromptZh,
+                en: cameraPrompt.deterministicPromptEn
+              }}
+              renderPrompts={renderPrompts}
+              stale={resultsStale}
             />
           </div>
 
@@ -691,8 +841,10 @@ export function CanvasOutpaintWorkbench({
           <div className="single-view-inference-note">
             <View size={16} />
             <span>
-              XYZ 控制目标相机围绕同一三维时刻移动；主体世界状态保持连续，屏幕朝向、轮廓、可见结构、遮挡与背景视差由目标相机重新投影。
-              原图不可见结构由 AI 基于类别与结构连续性保守补全。
+              XYZ 直接改变虚拟相机机位，整幅画面随镜头移动而重新成像和构图，不是让画面中的某一个对象在原背景中单独转动。
+              左右以原图观看者为首要基准：Yaw 正值让镜头向画面左边移动；对象大致正对原相机时，这等于来到对象自身右边。
+              前景、对象、中景、背景、地面、环境空间和画面边界会按新视锥一起重建；最终画面朝向由目标相机决定，不锁定原图朝屏幕的方向。
+              输出始终锁定原图宽高比，原图未拍到的新可见区域由 AI 延续原环境风格补全。
             </span>
           </div>
         </section>
@@ -701,18 +853,32 @@ export function CanvasOutpaintWorkbench({
           <header className="single-view-panel-header">
             <div>
               <span>NOVEL VIEW OUTPUT</span>
-              <strong>原图、目标投影与重绘结果</strong>
+              <strong>English 主结果 / 中文提示词对照</strong>
             </div>
-            {result && (
-              <a
-                className="single-view-tool-button"
-                download={`single-image-view-${result.requestId}.png`}
-                href={result.image}
-              >
-                <Download size={15} />
-                下载
-              </a>
+            {resultsStale && (results.en || results.zh) && (
+              <span className="single-view-stale-badge">
+                上一机位结果
+              </span>
             )}
+            <div className="single-view-header-actions">
+              {PROMPT_LANGUAGES.map((language) => {
+                const languageResult = results[language];
+
+                return languageResult ? (
+                  <a
+                    className="single-view-tool-button"
+                    download={`single-image-view-${language}-${languageResult.requestId}.png`}
+                    href={languageResult.image}
+                    key={language}
+                  >
+                    <Download size={15} />
+                    {language === PRIMARY_PROMPT_LANGUAGE
+                      ? "EN 主结果"
+                      : "中文对照"}
+                  </a>
+                ) : null;
+              })}
+            </div>
           </header>
 
           <div className="single-view-comparison">
@@ -731,59 +897,78 @@ export function CanvasOutpaintWorkbench({
               )} / ${formatAngle(normalizedRotation.z)}`}
             />
             <PreviewPanel
-              className="single-view-result-preview"
-              image={result?.image}
-              label="AI 新视角"
+              className="single-view-result-preview is-primary"
+              downloadName={
+                results.en
+                  ? `single-image-view-en-${results.en.requestId}.png`
+                  : undefined
+              }
+              image={results.en?.image}
+              label="English 主结果（推荐）"
               loading={isLoading}
               meta={
-                result
-                  ? `${result.imageModel} · ${(result.totalDurationMs / 1000).toFixed(1)} s`
+                results.en
+                  ? formatResultPreviewMeta(results.en, resultsStale)
                   : outputSize
+              }
+              onOpen={
+                results.en
+                  ? () => setDetailLanguage("en")
+                  : undefined
+              }
+            />
+            <PreviewPanel
+              className="single-view-result-preview"
+              downloadName={
+                results.zh
+                  ? `single-image-view-zh-${results.zh.requestId}.png`
+                  : undefined
+              }
+              image={results.zh?.image}
+              label="中文对照结果"
+              loading={isLoading}
+              meta={
+                results.zh
+                  ? formatResultPreviewMeta(results.zh, resultsStale)
+                  : outputSize
+              }
+              onOpen={
+                results.zh
+                  ? () => setDetailLanguage("zh")
+                  : undefined
               }
             />
           </div>
 
           {isLoading && (
-            <GenerationProgress
-              reasoningModel={reasoningModel}
-              imageModel={imageModel}
-              stage={stage}
-            />
-          )}
-
-          {analysis && !isLoading && (
-            <details className="single-view-analysis" open={stage === "success"}>
-              <summary>
-                <span>
-                  <Sparkles size={15} />
-                  空间推演摘要
-                </span>
-                <small>{analysis.viewDescription}</small>
-              </summary>
-              <div>
-                <p>{analysis.optimizedPrompt}</p>
-                <AnalysisList
-                  items={analysis.hiddenSurfacePlan}
-                  label="隐藏表面计划"
-                />
-                <AnalysisList
-                  items={analysis.uncertaintyNotes}
-                  label="不确定性说明"
-                />
-              </div>
-            </details>
+            <GenerationProgress imageModel={imageModel} stage={stage} />
           )}
 
           <div className="single-view-generation-console">
-            <label>
-              <span>视角重绘约束</span>
-              <textarea
-                disabled={isLoading}
-                maxLength={1500}
-                onChange={(event) => updateUserPrompt(event.target.value)}
-                value={prompt}
-              />
-            </label>
+            <div className="single-view-bilingual-constraints">
+              <label>
+                <span>中文补充约束</span>
+                <textarea
+                  disabled={isLoading}
+                  maxLength={1500}
+                  onChange={(event) =>
+                    updateUserPrompt("zh", event.target.value)
+                  }
+                  value={promptZh}
+                />
+              </label>
+              <label>
+                <span>English additional constraint</span>
+                <textarea
+                  disabled={isLoading}
+                  maxLength={1500}
+                  onChange={(event) =>
+                    updateUserPrompt("en", event.target.value)
+                  }
+                  value={promptEn}
+                />
+              </label>
+            </div>
 
             <details className="single-view-model-settings">
               <summary>
@@ -791,12 +976,6 @@ export function CanvasOutpaintWorkbench({
                 模型与端点
               </summary>
               <div>
-                <TextField
-                  disabled={isLoading}
-                  label="空间推理模型"
-                  onChange={setReasoningModel}
-                  value={reasoningModel}
-                />
                 <TextField
                   disabled={isLoading}
                   label="完整重绘模型"
@@ -817,10 +996,18 @@ export function CanvasOutpaintWorkbench({
                   value={imageEditURL}
                 />
                 <label className="single-view-field">
-                  <span>输出尺寸</span>
+                  <span>
+                    输出尺寸（锁定原图比例
+                    {source
+                      ? ` ${formatAspectRatio(source.width, source.height)}`
+                      : ""}
+                    ）
+                  </span>
                   <select
                     disabled={isLoading}
-                    onChange={(event) => setOutputSize(event.target.value)}
+                    onChange={(event) =>
+                      updateOutputSize(event.target.value)
+                    }
                     value={outputSize}
                   >
                     {uniqueOutputSizes.map((size) => (
@@ -848,7 +1035,15 @@ export function CanvasOutpaintWorkbench({
             {error && (
               <div className="single-view-error" role="alert">
                 <AlertCircle size={16} />
-                <span>{error}</span>
+                <div className="single-view-error-copy">
+                  <span>{error}</span>
+                  <button
+                    onClick={openFrontendDebugPanel}
+                    type="button"
+                  >
+                    打开 Debug 日志
+                  </button>
+                </div>
               </div>
             )}
 
@@ -869,38 +1064,53 @@ export function CanvasOutpaintWorkbench({
                   type="button"
                 >
                   <Sparkles size={17} />
-                  生成该角度的新视图
+                  中英文各生成一张并对比
                 </button>
               )}
             </div>
           </div>
         </section>
       </div>
+      {detailLanguage && detailResult && (
+        <ResultPreviewDialog
+          language={detailLanguage}
+          onClose={() => setDetailLanguage(undefined)}
+          result={detailResult}
+          stale={resultsStale}
+        />
+      )}
     </section>
   );
 }
 
 function PromptToolIsland({
-  cameraPrompt,
-  renderPrompt
+  cameraPrompts,
+  renderPrompts,
+  stale
 }: {
-  cameraPrompt: string;
-  renderPrompt: string;
+  cameraPrompts: Record<SingleImagePromptLanguage, string>;
+  renderPrompts: Partial<Record<SingleImagePromptLanguage, string>>;
+  stale: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<"camera" | "render">("camera");
+  const [activeLanguage, setActiveLanguage] =
+    useState<SingleImagePromptLanguage>("zh");
   const [expanded, setExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (renderPrompt) {
+    if (renderPrompts.zh || renderPrompts.en) {
       setActiveTab("render");
+      setActiveLanguage(PRIMARY_PROMPT_LANGUAGE);
     } else {
       setActiveTab("camera");
     }
-  }, [renderPrompt]);
+  }, [renderPrompts.en, renderPrompts.zh]);
 
   const activePrompt =
-    activeTab === "camera" ? cameraPrompt : renderPrompt;
+    activeTab === "camera"
+      ? cameraPrompts[activeLanguage]
+      : renderPrompts[activeLanguage] ?? "";
 
   async function copyActivePrompt() {
     if (!activePrompt || !navigator.clipboard?.writeText) {
@@ -919,27 +1129,52 @@ function PromptToolIsland({
       }`}
     >
       <div className="single-view-prompt-island-bar">
-        <div aria-label="提示词视图" role="tablist">
-          <button
-            aria-selected={activeTab === "camera"}
-            className={activeTab === "camera" ? "is-active" : ""}
-            onClick={() => setActiveTab("camera")}
-            role="tab"
-            type="button"
-          >
-            相机协议
-          </button>
-          <button
-            aria-selected={activeTab === "render"}
-            className={activeTab === "render" ? "is-active" : ""}
-            onClick={() => setActiveTab("render")}
-            role="tab"
-            type="button"
-          >
-            最终提示词
-          </button>
+        <div className="single-view-prompt-selectors">
+          <div aria-label="提示词视图" role="tablist">
+            <button
+              aria-selected={activeTab === "camera"}
+              className={activeTab === "camera" ? "is-active" : ""}
+              onClick={() => setActiveTab("camera")}
+              role="tab"
+              type="button"
+            >
+              相机协议
+            </button>
+            <button
+              aria-selected={activeTab === "render"}
+              className={activeTab === "render" ? "is-active" : ""}
+              onClick={() => setActiveTab("render")}
+              role="tab"
+              type="button"
+            >
+              最终提示词
+            </button>
+          </div>
+          <div aria-label="提示词语言" role="tablist">
+            <button
+              aria-selected={activeLanguage === "zh"}
+              className={activeLanguage === "zh" ? "is-active" : ""}
+              onClick={() => setActiveLanguage("zh")}
+              role="tab"
+              type="button"
+            >
+              中文
+            </button>
+            <button
+              aria-selected={activeLanguage === "en"}
+              className={activeLanguage === "en" ? "is-active" : ""}
+              onClick={() => setActiveLanguage("en")}
+              role="tab"
+              type="button"
+            >
+              EN
+            </button>
+          </div>
         </div>
         <span>
+          {stale && activeTab === "render" && activePrompt && (
+            <em>上一机位</em>
+          )}
           <button
             aria-label="复制当前提示词"
             disabled={!activePrompt}
@@ -983,12 +1218,12 @@ function CameraDistanceControl({
   return (
     <div className="single-view-distance-control">
       <div>
-        <span>景别</span>
+        <span>观察距离 / 景别</span>
         <strong>{cameraPromptLabel}</strong>
-        <output>{value.toFixed(1)}</output>
+        <output>{value.toFixed(1)} / 10</output>
       </div>
       <input
-        aria-label="景别控制值"
+        aria-label="观察距离与景别控制值"
         disabled={disabled}
         max="10"
         min="0"
@@ -1072,26 +1307,64 @@ function AxisControl({
 
 function PreviewPanel({
   className = "",
+  downloadName,
   image,
   label,
   loading = false,
-  meta
+  meta,
+  onOpen
 }: {
   className?: string;
+  downloadName?: string;
   image?: string;
   label: string;
   loading?: boolean;
   meta: string;
+  onOpen?: () => void;
 }) {
   return (
-    <figure className={`single-view-preview ${className}`.trim()}>
+    <figure
+      className={`single-view-preview ${className}${
+        image && onOpen ? " is-clickable" : ""
+      }`.trim()}
+    >
       <figcaption>
         <strong>{label}</strong>
         <span>{meta}</span>
       </figcaption>
       <div>
         {image ? (
-          <img alt={label} src={image} />
+          <>
+            {onOpen ? (
+              <button
+                aria-label={`放大查看${label}`}
+                className="single-view-preview-open"
+                onClick={onOpen}
+                title="放大查看"
+                type="button"
+              >
+                <img alt={label} src={image} />
+              </button>
+            ) : (
+              <img alt={label} src={image} />
+            )}
+            {downloadName && (
+              <a
+                aria-label={`下载${label}`}
+                className="single-view-preview-download"
+                download={downloadName}
+                href={image}
+                title="下载图片"
+              >
+                <Download size={15} />
+              </a>
+            )}
+            {onOpen && (
+              <span className="single-view-preview-expand">
+                <Maximize2 size={15} />
+              </span>
+            )}
+          </>
         ) : loading ? (
           <span className="single-view-preview-loading">
             <LoaderCircle className="animate-spin" size={22} />
@@ -1108,28 +1381,139 @@ function PreviewPanel({
   );
 }
 
+function ResultPreviewDialog({
+  language,
+  onClose,
+  result,
+  stale
+}: {
+  language: SingleImagePromptLanguage;
+  onClose: () => void;
+  result: SingleImageViewpointResult;
+  stale: boolean;
+}) {
+  const label =
+    language === "en" ? "English 主结果（推荐）" : "中文对照结果";
+  const prompt = result.cameraPrompt;
+  const downloadName = `single-image-view-${language}-${result.requestId}.png`;
+
+  return (
+    <div
+      className="single-view-detail-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        aria-label={`${label}详情`}
+        aria-modal="true"
+        className="single-view-detail-dialog"
+        role="dialog"
+      >
+        <header>
+          <div>
+            <span>GENERATED VIEW DETAIL</span>
+            <h2>{label}</h2>
+            <p>
+              {stale ? "上一机位结果 · " : ""}
+              {prompt.azimuthLabelZh} · {prompt.elevationLabelZh} ·{" "}
+              {prompt.distanceLabelZh}
+            </p>
+          </div>
+          <div className="single-view-detail-actions">
+            <a
+              download={downloadName}
+              href={result.image}
+              title="下载原图"
+            >
+              <Download size={17} />
+              下载
+            </a>
+            <button
+              aria-label="关闭图片详情"
+              onClick={onClose}
+              title="关闭"
+              type="button"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </header>
+        <div className="single-view-detail-stage">
+          <img alt={`${label}详情`} src={result.image} />
+        </div>
+        <dl className="single-view-detail-meta">
+          <div>
+            <dt>累计 XYZ</dt>
+            <dd>
+              X {formatAngle(prompt.cumulativeRotationDegrees.x)} · Y{" "}
+              {formatAngle(prompt.cumulativeRotationDegrees.y)} · Z{" "}
+              {formatAngle(prompt.cumulativeRotationDegrees.z)}
+            </dd>
+          </div>
+          <div>
+            <dt>真实相机方向</dt>
+            <dd>
+              方位 {formatAngle(prompt.cameraAzimuthDegrees)} · 俯仰{" "}
+              {formatAngle(prompt.cameraElevationDegrees)} · Roll{" "}
+              {formatAngle(prompt.cameraRollDegrees)}
+            </dd>
+          </div>
+          <div>
+            <dt>输出</dt>
+            <dd>
+              {result.outputSize} · {result.imageMimeType}
+            </dd>
+          </div>
+          <div>
+            <dt>模型</dt>
+            <dd>
+              {result.reasoningModel} → {result.imageModel}
+            </dd>
+          </div>
+          <div>
+            <dt>耗时</dt>
+            <dd>
+              分析 {(result.reasoningDurationMs / 1000).toFixed(1)} s ·
+              重绘 {(result.renderingDurationMs / 1000).toFixed(1)} s ·
+              总计 {(result.totalDurationMs / 1000).toFixed(1)} s
+            </dd>
+          </div>
+          <div>
+            <dt>请求 ID</dt>
+            <dd>{result.requestId}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  );
+}
+
 function GenerationProgress({
   imageModel,
-  reasoningModel,
   stage
 }: {
   imageModel: string;
-  reasoningModel: string;
-  stage: WorkbenchStage;
+  stage: "reasoning" | "rendering";
 }) {
-  const isRendering = stage === "rendering";
-
   return (
     <div className="single-view-progress">
       <ProgressStep
-        active={!isRendering}
-        complete={isRendering}
-        label={`[Step 1/2] ${reasoningModel} 正在识别主体并推演隐藏表面`}
+        active={stage === "reasoning"}
+        complete={stage === "rendering"}
+        label={`${DEFAULT_SINGLE_IMAGE_REASONING_MODEL} 正在生成中英文共享视觉事实包`}
       />
       <ProgressStep
-        active={isRendering}
+        active={stage === "rendering"}
         complete={false}
-        label={`[Step 2/2] ${imageModel} 正在重绘目标相机视角`}
+        label={`${imageModel} 正在执行中文提示词重拍`}
+      />
+      <ProgressStep
+        active={stage === "rendering"}
+        complete={false}
+        label={`${imageModel} is rendering the English prompt`}
       />
     </div>
   );
@@ -1159,23 +1543,6 @@ function ProgressStep({
       </span>
       <strong>{label}</strong>
     </div>
-  );
-}
-
-function AnalysisList({ items, label }: { items: string[]; label: string }) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <section>
-      <strong>{label}</strong>
-      <ul>
-        {items.map((item, index) => (
-          <li key={`${label}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -1282,8 +1649,59 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatAspectRatio(width: number, height: number) {
+  const divisor = greatestCommonDivisor(width, height);
+  const reducedWidth = width / divisor;
+  const reducedHeight = height / divisor;
+
+  return reducedWidth <= 100 && reducedHeight <= 100
+    ? `${reducedWidth}:${reducedHeight}`
+    : `${(width / height).toFixed(3)}:1`;
+}
+
+function greatestCommonDivisor(left: number, right: number) {
+  let a = Math.abs(Math.round(left));
+  let b = Math.abs(Math.round(right));
+
+  while (b !== 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+
+  return Math.max(1, a);
+}
+
 function formatAngle(value: number) {
   return `${formatInputAngle(value)}°`;
+}
+
+function formatResultPreviewMeta(
+  result: SingleImageViewpointResult,
+  stale: boolean
+) {
+  const rotation = result.cameraPrompt.cumulativeRotationDegrees;
+  return [
+    stale ? "上一机位" : undefined,
+    `X ${formatAngle(rotation.x)} · Y ${formatAngle(rotation.y)} · Z ${formatAngle(rotation.z)}`,
+    result.outputSize,
+    `${(result.totalDurationMs / 1000).toFixed(1)} s`
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function omitPromptLanguages<T>(
+  input: Partial<Record<SingleImagePromptLanguage, T>>,
+  languages: readonly SingleImagePromptLanguage[]
+) {
+  const next = { ...input };
+
+  for (const language of languages) {
+    delete next[language];
+  }
+
+  return next;
 }
 
 function formatInputAngle(value: number) {

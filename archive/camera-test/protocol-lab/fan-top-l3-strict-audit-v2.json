@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-07-16T10:29:21.733Z",
+  "model": "gpt-5.6-sol",
+  "status": 200,
+  "durationMs": 26724,
+  "view": "top",
+  "inputs": [
+    {
+      "id": "source",
+      "label": "原始正前方事实图",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\protocol-lab\\fan-medium-source-crop.png"
+    },
+    {
+      "id": "side",
+      "label": "严格右侧结构证据",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\2026-07-16-fan-side-right-90-v39\\result.png"
+    },
+    {
+      "id": "candidate",
+      "label": "俯视 +75°候选",
+      "path": "L:\\AIProject\\api2Image\\archive\\camera-test\\2026-07-16T06-49-30-003Z-fan-top-x75-v40-candidate-l3-calibrated-retry\\result.png"
+    }
+  ],
+  "audit": {
+    "view": "正前上方高机位俯视，接近 Yaw 0°、Pitch +75°、Roll 0°",
+    "grille_ratio_estimate": 0.3,
+    "grille_projection_score": 4,
+    "motor_axis_score": 4,
+    "support_connection_score": 3,
+    "camera_parallax_score": 4,
+    "roll_zero_score": 4,
+    "active_head_tilt_detected": false,
+    "assembly_break_detected": false,
+    "strict_pass": true,
+    "visible_evidence": [
+      "圆形网罩投影为横向窄椭圆，外缘短轴约为长轴的0.30，位于0.20至0.35区间内。",
+      "白色后置电机壳出现在网罩中心的画面上方，符合水平电机轴在前上方俯视时产生的深度投影。",
+      "网罩中心下方可见支撑颈，并连续接入底座上方中央区域；未见网罩、电机壳与支撑相互分离。",
+      "圆形底座保持水平放置，其顶面大幅可见且前侧厚边清楚，符合高位向下观察。",
+      "桌面顶面、桌后沿、后方地面以及冰箱和橱柜形成一致的前上方高机位视差。",
+      "网罩长轴、桌后沿及画面中的橱柜结构整体保持水平，没有可见的相机横滚。"
+    ],
+    "defects": [
+      "竖直立柱大部分被网罩和底座顶面遮挡，支撑连续性的可见证据不如其余项目充分。"
+    ],
+    "verdict": "严格通过：网罩压缩比符合目标俯视角，后置电机壳、支撑、水平底座和环境视差相互一致；未发现机头主动俯仰、装配断裂或Roll错误。"
+  },
+  "usage": {
+    "input_tokens": 5676,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 2816
+    },
+    "output_tokens": 769,
+    "output_tokens_details": {
+      "reasoning_tokens": 346
+    },
+    "total_tokens": 6445
+  }
+}

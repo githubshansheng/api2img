@@ -1,0 +1,43 @@
+{
+  "camera_side": "source_frame_left",
+  "estimated_yaw_degrees": 52,
+  "direction_pass": true,
+  "yaw_strength_pass": true,
+  "estimated_pitch_degrees": 6,
+  "pitch_pass": true,
+  "estimated_roll_degrees": 0,
+  "roll_pass": true,
+  "distance_framing_pass": true,
+  "depth_of_field_pass": true,
+  "anti_tracking_pass": true,
+  "whole_scene_reprojection_pass": true,
+  "aspect_ratio_pass": true,
+  "overall_pass": true,
+  "evidence_zh": [
+    "结果中鼻尖与面部前向轴明显投向画面右侧，人物自身右侧成为近侧，符合相机沿原图画面左侧轨道环绕的唯一方向定义。",
+    "面部由原图近正面转为明显右向三分之二侧面，远侧眼、脸颊轮廓显著收窄，鼻部产生强烈横向投影，估算水平偏航约52°，位于40°至72°通过区间。",
+    "人物没有追随新相机继续正对镜头；双眼呈明显近远差异，侧脸结构充分形成。",
+    "视点呈轻微高机位，能略微向下看到头顶与肩颈区域，但没有夸张俯拍，估算Pitch约+6°。",
+    "画面基本水平，仅有极弱或不可辨识的滚转，估算Roll约0°，处于-6°至+2°容许范围。",
+    "人物从原图紧密头肩特写缩小为包含上半身、椅背、窗台、桌柜及更多墙面的环境人像，符合远景距离控制。",
+    "窗框、窗台、人物、椅背和后方桌柜共同呈现与左侧轨道移动一致的视差、遮挡及透视变化，不是仅旋转人物或单纯扩图。",
+    "文件元数据验收：源图 1254×1254，结果图 2048×2048，宽高比一致。"
+  ],
+  "failures_zh": [],
+  "correction_prompt_zh": "当前结果已通过目标机位、方向、俯仰、Roll、景别、景深、整场景视差、反镜头跟随和文件宽高比验收，无需修正。",
+  "dimensions": {
+    "source": {
+      "width": 1254,
+      "height": 1254
+    },
+    "result": {
+      "width": 2048,
+      "height": 2048
+    }
+  },
+  "durationMs": 30750,
+  "model": "gpt-5.6-sol",
+  "source": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png",
+  "result": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\zh-protocol-10.6-anti-camera-tracking-retry\\result.png",
+  "camera": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\camera-pose.png"
+}

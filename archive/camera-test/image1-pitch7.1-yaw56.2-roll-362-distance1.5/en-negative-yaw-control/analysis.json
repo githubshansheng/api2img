@@ -1,0 +1,42 @@
+{
+  "subjectCategory": "person",
+  "optimizedPrompt": "Natural photorealistic indoor portrait of a young East Asian woman with gray-brown eyes, dark brown-black hair in a loose bun, wispy strands along her cheeks and neck, and a lightweight textured white square-neck top. Preserve her facial identity and hairstyle, delicate skin, subtle makeup, and pink lips. Soft window light illuminates her face; the background contains a pale window frame, beige-gray wall, and warm brown wooden furniture. Keep the eyes and face sharply focused with natural background blur.",
+  "viewDescription": "Natural photorealistic indoor portrait of a young East Asian woman with gray-brown eyes, dark brown-black hair in a loose bun, wispy strands along her cheeks and neck, and a lightweight textured white square-neck top. Preserve her facial identity and hairstyle, delicate skin, subtle makeup, and pink lips. Soft window light illuminates her face; the background contains a pale window frame, beige-gray wall, and warm brown wooden furniture. Keep the eyes and face sharply focused with natural background blur.",
+  "sourceViewDescription": "Image 1 is a square close photorealistic portrait with the woman roughly facing the original camera; screen right corresponds to her anatomical left, where her left ear, cheek, and shoulder are clearer, while a pale window frame sits at screen left and warm brown furniture is behind her at screen right.",
+  "targetViewDescription": "object-left-front three-quarter view on the source viewer's right orbit, eye level, wide shot, the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "Her anatomical left ear, left cheekbone-to-jaw contour, and the left attachment of the bun should become more fully visible, corresponding to structures on the original screen right.",
+    "Her anatomical right eye, right cheek, and right shoulder correspond to the original screen left and should appear moderately shortened and partly overlapped by the nose, facial front edge, and head contour.",
+    "The nasal bridge, tip, lips, and chin must remain naturally continuous; both eyes stay identifiable with unchanged gray-brown irises, natural lashes, and subtle peach eye makeup.",
+    "The white top’s square neckline, clavicle area, and shoulder connections must remain anatomically coherent, with visible lightweight woven texture and soft folds."
+  ],
+  "occlusionConstraints": [
+    "The nose may slightly overlap her anatomical right inner eye corner and right cheek, but must not incorrectly cover her anatomical left eye.",
+    "Wispy temple hair may partially cross her anatomical left ear, while the helix, lobe, and connection to the head remain coherent.",
+    "The bun overlaps the rear head contour, and loose strands may only partly cross the side of the neck without becoming an unnatural solid hair curtain.",
+    "Her anatomical right shoulder and right neckline appear narrower through depth overlap and must not be exchanged with the left shoulder."
+  ],
+  "identityConstraints": [
+    "Preserve the young East Asian woman’s oval face, fine straight brows, gray-brown eyes, small nose, soft jawline, and naturally pink lip shape.",
+    "Preserve the dark brown-black loose high bun, slightly off-center hairline part, fine temple strands on both sides, and loose neck hairs.",
+    "Preserve delicate natural skin, subtle warm eye makeup, no jewelry, no glasses, and a calm gentle expression.",
+    "Preserve the lightweight white square-neck top and its fine woven texture, adding no text, patterns, or logos."
+  ],
+  "hiddenSurfacePlan": [
+    "Complete the rounded hair volume from her anatomical left rear skull into the back of the bun, using overlapping locks and a few loose strands consistent with the existing dark hair.",
+    "Complete the hairline, temple, and neck connection behind her anatomical left ear with natural skin transitions and fine wispy hairs.",
+    "Complete her anatomical left shoulder cap, upper arm, and sleeve edge as one continuous structure, retaining the white thin fabric, soft folds, and square-neck connection.",
+    "If additional lower space becomes visible, conservatively continue the upper chest, both shoulders, and white top without inventing jewelry, hands, or extra clothing layers."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean without new obstructions; the eyes and face remain the crisp midground focal area with a soft high-resolution portrait rendering.",
+    "Continue the pale window frame and cool gray-green vertical recess at screen left, plus the beige-gray wall and warm brown wooden furniture at screen right, all with pronounced natural blur.",
+    "Any newly included environment should extend the existing wall, window-side structure, furniture surfaces, and soft shadows without copying borders or leaving empty areas.",
+    "The floor is not recorded; if lower space enters the image, conservatively add a low-detail neutral indoor floor and soft shadow beneath furniture while preserving the square aspect ratio."
+  ],
+  "uncertaintyNotes": [
+    "The back of the bun, her anatomical left upper arm, and the off-frame floor are not directly recorded in Image 1 and require minimal-detail continuous completion.",
+    "The warm brown background object is identifiable as wooden furniture, but its exact type and full shape are uncertain, so distinct drawers, handles, or decorations should not be invented."
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "requestId": "1dac0032-ff85-4e9a-85c8-e54c0ef4a00a",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2182836,
+    "sha256": "87b6ef7e93adacecd006fc460bb9a1783549a7a968eda06a4d7c86cccde8cd00"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 19496,
+    "sha256": "ada4db8ca5a41e630bd29817f645112cde99a6282d38eb0bfb733efffd80be1d"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 100572,
+    "sha256": "ba2dd72b810f217b2cfde2f4290a5da6c0fbfb61749ae8f77384c43260b0421a"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "prompt_language": "en",
+  "user_prompt": "Continue the same real-world moment, spatial relationships, materials, lighting, colors, and visual style without adding unrelated concepts.",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\archive\\camera-test\\2026-07-16T13-43-46-459Z-matrix-v8-fan-side-right-90\\source.png"
+}

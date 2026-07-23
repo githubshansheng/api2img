@@ -1,0 +1,44 @@
+{
+  "subjectCategory": "person",
+  "optimizedPrompt": "The same young East Asian woman with gray-brown eyes, straight fine brows, a soft oval face, pale natural pink lips, and near-black dark brown hair in a loose bun with wispy strands. Preserve the lightweight textured white square-neck top, soft window light, realistic delicate skin, and shallow-depth indoor setting. Reveal her right ear and right hairline moderately while her left ear is partly hidden by face and hair; keep credible perspective across the nose, eyes, jaw, neck, and shoulders. Extend the garment, window-side wall, and warm brown furniture naturally, adding no jewelry, text, or new objects.",
+  "viewDescription": "The same young East Asian woman with gray-brown eyes, straight fine brows, a soft oval face, pale natural pink lips, and near-black dark brown hair in a loose bun with wispy strands. Preserve the lightweight textured white square-neck top, soft window light, realistic delicate skin, and shallow-depth indoor setting. Reveal her right ear and right hairline moderately while her left ear is partly hidden by face and hair; keep credible perspective across the nose, eyes, jaw, neck, and shoulders. Extend the garment, window-side wall, and warm brown furniture naturally, adding no jewelry, text, or new objects.",
+  "sourceViewDescription": "The source shows the head, neck, shoulders, and part of the upper chest; source-screen right is the subject’s left ear and is clearly visible, while source-screen left is her right ear and is hidden by hair.",
+  "targetViewDescription": "object-right-front three-quarter view on the source viewer's left orbit, eye level, wide shot, the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "Source-screen left, corresponding to the subject’s right, reveals more of the brow, eye, cheekbone, jawline, and ear, with the right ear proportionate to the head.",
+    "Source-screen right, corresponding to the subject’s left, becomes foreshortened and overlapped across the eye, cheekbone, and ear, so the left ear is no longer fully spread.",
+    "The nasal bridge and tip overlap more with the subject’s left cheek contour, while both eyes retain the same identity traits.",
+    "The loose bun, neck, clavicles, and white neckline remain continuously connected, with wispy strands distributed naturally over the head surface."
+  ],
+  "occlusionConstraints": [
+    "The subject’s left ear is partly occluded by the left facial contour and temple hair, without intersecting the hair or detaching from the skull.",
+    "The outer contour of the subject’s left eye narrows, while the nasal bridge must not unnaturally cover the entire eye.",
+    "Temple hair on the subject’s right may cover the edge of the right ear but must not fully conceal the newly revealed auricle.",
+    "The jaw and neck overlap with natural shadow, and the neckline must not cut into the skin or clavicles."
+  ],
+  "identityConstraints": [
+    "Preserve the gray-brown irises, fine straight brows, soft oval face, small nose, and natural pale-pink lips without changing perceived age or ethnicity.",
+    "Preserve the near-black dark brown loose bun, slightly off-center part, and wispy side strands, adding no bangs, dye, or hair accessories.",
+    "Preserve the lightweight textured white square-neck top and absence of jewelry; the fabric remains semi-matte with a breathable weave.",
+    "Preserve the bright soft window light on the left, warm gentle shadows, realistic pores, and soft optical rendering."
+  ],
+  "hiddenSurfacePlan": [
+    "Complete the subject’s right ear with a conservative helix, antihelix, and earlobe, naturally connecting the right temple hair to the area behind the jaw.",
+    "Complete the unseen hair mass between the subject’s right rear skull and loose bun, guiding dark strands continuously into the bun.",
+    "Complete the subject’s right neck, shoulder, and neckline so the clavicle, shoulder line, and lightweight white fabric connect naturally.",
+    "Complete upper-body garment folds beyond the source frame using only the same textured white fabric, with no buttons, patterns, or accessories."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean with no new occluders, and retain the face and eyes as the sharp focal region.",
+    "The midground continues the neck, shoulders, white garment, and loose strands, with skin and fabric detail softening gradually.",
+    "The background continues the bright window frame and gray-white wall on the left, warm brown wooden furniture on the right, and darker lower area, all strongly defocused.",
+    "Complete unrecorded surroundings as a spatially continuous window-side interior using neutral gray walls, warm wood furniture, and natural daylight, without frozen edges or blank areas."
+  ],
+  "uncertaintyNotes": [
+    "The subject’s right ear is absent from the source, so its exact auricular details require conservative inference from the opposite ear’s proportions and typical anatomy.",
+    "The rear strand flow of the bun is not fully recorded and should retain the existing color, density, and loosely coiled structure.",
+    "The garment shape beyond the source is unknown; extend only the visible square neckline, relaxed shoulder construction, and matching white fabric.",
+    "The complete furniture shape is unclear; extend only a simple interior structure consistent with the warm brown horizontal surface and darker lower level."
+  ]
+}

@@ -12,6 +12,8 @@ export const fallbackBootstrapConfig: BootstrapConfig = {
   defaultModelId: DEFAULT_MODEL_ID,
   featureFlags: {
     enableImageEditingWorkbench: true,
+    enableVector3DViewpoint: true,
+    enableCanvasOutpaint: true,
     enableBatch: true,
     enableCompare: true,
     enableHistory: true,
@@ -26,6 +28,8 @@ export const fallbackBootstrapConfig: BootstrapConfig = {
   navItems: [
     { key: "studio", label: "GPT Studio", enabled: true },
     { key: "editing", label: "修图工作台", enabled: true },
+    { key: "viewpoint", label: "3D 视角重塑", enabled: true },
+    { key: "outpaint", label: "单图 AI 新视角", enabled: true },
     { key: "generation", label: "生成图片", enabled: true },
     { key: "compare", label: "模型对比", enabled: true },
     { key: "history", label: "历史记录", enabled: true },

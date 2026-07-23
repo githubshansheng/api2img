@@ -1,0 +1,24 @@
+{
+  "protocol": "10.2",
+  "rotation": {
+    "x": 7.1,
+    "y": 56.2,
+    "z": -362
+  },
+  "equivalentRotation": {
+    "x": 7.1,
+    "y": 56.2,
+    "z": -2
+  },
+  "cameraDistance": 1.5,
+  "sourceAspectRatio": "1:1",
+  "outputSize": "2048x2048",
+  "viewerOrbitDirectionZh": "原图观看者左侧",
+  "objectOrbitDirectionZh": "被摄对象自身右侧",
+  "expectedScreenProjection": "camera moves toward source-frame left; near layers and the source-facing depth axis project toward final-frame right",
+  "rejectedLegacyEvidence": {
+    "image2AspectRatio": "1402x1122 (1.2496:1)",
+    "image3AspectRatio": "1448x1086 (4:3)",
+    "reason": "both outputs changed the 1:1 source ratio and visually resolved the side direction opposite to the requested positive yaw"
+  }
+}

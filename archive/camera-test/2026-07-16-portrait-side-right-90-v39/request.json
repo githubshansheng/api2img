@@ -1,0 +1,35 @@
+{
+  "requestId": "1ad7bbb8-31b8-4d0d-aa4c-d24cf9871dec",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2387000,
+    "sha256": "5c2209c61e226801c50a766adfbee4ebbee81fe9340c3d6b8dd90d8412d3ee2b"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 32796,
+    "sha256": "71efd6419fc361a102a855230c4c9302ed7214f9f466974f5e6e593274df5919"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 120720,
+    "sha256": "465098a865d8f56a5824faf50a0efdc57561c174107ba6cc288b1c008b70e1fd"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+  },
+  "camera_distance": 7,
+  "user_prompt": "目标相机机位是最终屏幕投影的唯一来源。保持同一人物身份、发型、服装、光线与室内场景事实；允许且必须按右侧90度目标机位重新生成真实侧脸轮廓、头部与肩颈的侧向投影、近远遮挡和背景视差，不保留原图正面投影。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\.artifacts\\single-image-viewpoint-live\\source-person.png"
+}

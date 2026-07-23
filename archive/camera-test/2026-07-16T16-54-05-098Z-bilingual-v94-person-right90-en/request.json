@@ -1,0 +1,36 @@
+{
+  "requestId": "ddabdd54-7a42-4724-ae70-478cd18e60cf",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2387000,
+    "sha256": "5c2209c61e226801c50a766adfbee4ebbee81fe9340c3d6b8dd90d8412d3ee2b"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 33060,
+    "sha256": "a079d51bd5d9116aacc2f4808d0332ba934e8c91f2b9b355ee552338ec500454"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 142940,
+    "sha256": "eb6d1ae01a3e2c1907d79265fef84f0cace365358694a12cd3795c2bbc82000f"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "prompt_language": "en",
+  "user_prompt": "Continue the same real-world moment, spatial relationships, materials, lighting, colors, and visual style without adding unrelated concepts.",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\archive\\camera-test\\source-person.png"
+}

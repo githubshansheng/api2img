@@ -1,0 +1,42 @@
+{
+  "subjectCategory": "product_object",
+  "optimizedPrompt": "A compact white tabletop electric fan stands on a pale wood table. Its circular grille reads as a narrow vertical profile, with front and rear grille rims, blade layer, central hub, and rear housing forming tight stacked edges. A short cylindrical stem joins a low oval base with a small top control. Use matte and semi-gloss white plastic. The bright warm-white kitchen contains a fruit plate, iced water glass, magazine, pale wood cabinets, white appliances, shelf, plants, window, and refrigerator, with soft daylight and realistic product-photography rendering.",
+  "viewDescription": "A compact white tabletop electric fan stands on a pale wood table. Its circular grille reads as a narrow vertical profile, with front and rear grille rims, blade layer, central hub, and rear housing forming tight stacked edges. A short cylindrical stem joins a low oval base with a small top control. Use matte and semi-gloss white plastic. The bright warm-white kitchen contains a fruit plate, iced water glass, magazine, pale wood cabinets, white appliances, shelf, plants, window, and refrigerator, with soft daylight and realistic product-photography rendering.",
+  "sourceViewDescription": "Image 1 shows a compact white tabletop fan with a circular radial grille, white blades, central round cap, short stem, and oval base on a pale wood table in a bright kitchen.",
+  "targetViewDescription": "strict right-side view, eye level, medium shot, roll 0 degrees with the source horizon as the zero-roll reference",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "The circular grille and radial spokes shorten and overlap into a narrow vertical profile.",
+    "The front and rear grille rims and rear housing depth appear as layered edges.",
+    "The blades and central hub largely occlude one another, leaving thin layered outlines.",
+    "The short stem, oval base, and small control on the base top remain identifiable."
+  ],
+  "occlusionConstraints": [
+    "The front and rear grille spokes strongly overlap and must not form a complete radial circle.",
+    "The central cap blocks the axle area and overlaps the outline of the rear motor housing.",
+    "The blades are mostly hidden by the grille rims and central assembly.",
+    "The stem partially overlaps the lower edge of the fan head, while the main base remains unobscured."
+  ],
+  "identityConstraints": [
+    "Keep the subject a plain white compact tabletop fan with no added brand, text, or colored decoration.",
+    "Preserve the dense curved radial grille, round central cap, short cylindrical stem, and low oval base.",
+    "Maintain clean matte and semi-gloss plastic with soft highlights.",
+    "Retain bright warm-white daylight, low-contrast shadows, and realistic domestic product photography."
+  ],
+  "hiddenSurfacePlan": [
+    "Complete the real blade thickness, rear grille layer, and motor-housing outline behind the visible grille.",
+    "Complete the connecting neck between the fan head and stem without adding an unverified complex hinge.",
+    "Complete the base top hidden by the stem and its continuous rounded edge.",
+    "Use matching white plastic for unseen connectors and keep the construction simple."
+  ],
+  "scenePlan": [
+    "Extend the pale wood tabletop in the foreground, retaining the fruit plate, iced water glass, and magazine at the edge.",
+    "Keep the fan and rear kitchen counter in the middle layer, including the pot, toaster oven, kettle, cutting board, and leafy vase.",
+    "Continue the pale tiled wall, wood shelf with jars, pale wood cabinets, bright window, and white refrigerator in the background.",
+    "Fill uncovered areas with the same kitchen wall, counter surfaces, and natural illumination without introducing conspicuous new objects."
+  ],
+  "uncertaintyNotes": [
+    "The rear motor housing is only partly evidenced along the grille edge, so its seams should remain simplified.",
+    "The stem joint and back of the base lack clear evidence; do not invent ports, labels, or text."
+  ]
+}

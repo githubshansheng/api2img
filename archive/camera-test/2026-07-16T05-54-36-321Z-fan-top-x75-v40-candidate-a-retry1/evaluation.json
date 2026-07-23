@@ -1,0 +1,17 @@
+{
+  "protocol": "4.0-candidate-a",
+  "passed": false,
+  "target": {
+    "grilleMinorMajorRatio": [0.2, 0.35],
+    "subjectHeightRatio": [0.45, 0.55]
+  },
+  "observedApprox": {
+    "grilleMinorMajorRatio": 0.974,
+    "subjectHeightRatio": 0.264
+  },
+  "findings": [
+    "The kitchen viewpoint moved upward, but the fan head compensated to face the target camera.",
+    "The grille remained nearly circular instead of becoming a strongly foreshortened horizontal ellipse.",
+    "The fan was rendered as a distant subject instead of the requested medium shot."
+  ]
+}

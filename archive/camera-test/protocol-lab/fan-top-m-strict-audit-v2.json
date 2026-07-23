@@ -1,0 +1,61 @@
+{
+  "createdAt": "2026-07-16T10:24:38.976Z",
+  "model": "gpt-5.6-sol",
+  "status": 200,
+  "durationMs": 36521,
+  "view": "top",
+  "inputs": [
+    {
+      "id": "source",
+      "label": "原始正前方事实图",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\protocol-lab\\fan-medium-source-crop.png"
+    },
+    {
+      "id": "side",
+      "label": "严格右侧结构证据",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\2026-07-16-fan-side-right-90-v39\\result.png"
+    },
+    {
+      "id": "candidate",
+      "label": "俯视 +75°候选",
+      "path": "L:\\AIProject\\api2Image\\archive\\camera-test\\2026-07-16T18-25-00-fan-top-x75-v45-candidate-m-local-projection-repair\\result.png"
+    }
+  ],
+  "audit": {
+    "view": "正前上方高机位俯视",
+    "grille_ratio_estimate": 0.48,
+    "grille_projection_score": 1,
+    "motor_axis_score": 3,
+    "support_connection_score": 1,
+    "camera_parallax_score": 4,
+    "roll_zero_score": 4,
+    "active_head_tilt_detected": true,
+    "assembly_break_detected": true,
+    "strict_pass": false,
+    "visible_evidence": [
+      "候选图中网罩正面辐条区域投影为较宽椭圆，短轴约为长轴的0.48，明显高于0.20至0.35的严格区间。",
+      "白色后置电机壳投影在网罩中心上方，符合水平深度轴在高俯视相机中向屏幕上方投影的趋势。",
+      "网罩下方可见一段向底座延伸的白色支撑颈，但其上端落在网罩下缘附近，未显示从上方电机壳后下部连续接入。",
+      "圆形底座顶面清晰可见并保持水平放置，桌面大面积顶面、后方地板及橱柜顶面形成明显高机位俯视视差。",
+      "冰箱竖边、橱柜竖边及桌面横向边缘没有一致性的画面旋转倾斜，未见明显Roll偏差。"
+    ],
+    "defects": [
+      "网罩压缩不足，仍呈宽椭圆而非目标Pitch +75°应有的横向窄盘投影，表明机头主动向上迎向相机。",
+      "上方电机壳与下方支撑颈之间缺少可见的连续结构路径；支撑看似直接接在网罩下缘，违背支撑颈从电机壳后下部进入立柱的装配事实。",
+      "机头主动俯仰使网罩平面与相机视线夹角显著小于75°。"
+    ],
+    "verdict": "不通过：相机高机位与Roll基本正确，电机壳也位于网罩中心上方，但网罩短长轴比约0.48，超出0.20至0.35范围；同时存在主动机头俯仰和支撑—电机壳连接不连续。"
+  },
+  "usage": {
+    "input_tokens": 5676,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 0
+    },
+    "output_tokens": 1413,
+    "output_tokens_details": {
+      "reasoning_tokens": 892
+    },
+    "total_tokens": 7089
+  }
+}

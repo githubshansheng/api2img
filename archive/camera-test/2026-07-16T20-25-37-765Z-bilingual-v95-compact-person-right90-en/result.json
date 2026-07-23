@@ -1,0 +1,117 @@
+{
+  "requestId": "e09c08c5-6823-4883-8b82-1ce9abfd0017",
+  "image": {
+    "mediaType": "image/png",
+    "base64Length": 2386484,
+    "sha256": "261d74a7eb2c33e4bf8c85e32e83663259773ea4eafb59c035cffca156f55927"
+  },
+  "imageMimeType": "image/png",
+  "pose": {
+    "cumulativeDegrees": {
+      "x": 0,
+      "y": 90,
+      "z": 0
+    },
+    "normalizedDegrees": {
+      "x": 0,
+      "y": 90,
+      "z": 0
+    },
+    "quaternion": {
+      "x": 0,
+      "y": -0.7071067811865475,
+      "z": 0,
+      "w": 0.7071067811865476
+    },
+    "eulerOrder": "YXZ",
+    "coordinateSystem": "right-handed-camera-orbit"
+  },
+  "cameraPrompt": {
+    "cameraAzimuthDegrees": 90,
+    "cameraElevationDegrees": 0,
+    "cameraRollDegrees": 0,
+    "cameraDistance": 5,
+    "azimuthKey": "right",
+    "elevationKey": "eye-level",
+    "distanceKey": "medium",
+    "azimuthLabelZh": "基准右侧机位",
+    "azimuthLabelEn": "strict right-side view",
+    "elevationLabelZh": "平视",
+    "elevationLabelEn": "eye level",
+    "distanceLabelZh": "中景",
+    "distanceLabelEn": "medium shot",
+    "rollLabelZh": "Roll 0°，地平线保持零度基准",
+    "rollLabelEn": "roll 0 degrees with the source horizon as the zero-roll reference",
+    "requiredVisibleSurfaces": [
+      "目标画面必须来自锁定机位的新视锥；前景、关注对象、中景、背景、地面、环境物体和画面边界必须一起重新成像。",
+      "原图未拍到但会进入目标新视锥的对象结构与环境区域，依据原图的空间、材质、光线、色彩和画风合理想象并自然补全。"
+    ],
+    "requiredOccludedSurfaces": [
+      "所有近远遮挡、入画、出画和重新显露关系必须按目标相机位置重新计算，不得沿用源图的二维遮挡顺序。",
+      "目标机位看不到的源图区域可以自然退隐或离开画面，不得为了保留原构图而复制、镜像或贴回。"
+    ],
+    "perspectiveConstraints": [
+      "整幅画面的透视、视差、地平线、构图、轮廓和尺度必须共同证明相机已沿轨道移动到目标机位。",
+      "相机以固定的场景关注点为轨道圆心，镜头光轴在移动过程中持续指向同一关注点；这是环绕拍摄，不是横向平移，也不是让画面中的某个对象代替相机转动。",
+      "相机从零度基准向右环绕至严格右侧机位；所有深度层必须出现与该水平机位一致的视差和遮挡变化。",
+      "严格侧面机位验收：源图中朝向镜头、占据较大面积的主要投影必须在新画面中接近边缘投影并明显变窄，同时显露真实前后深度；如果该主要投影仍大面积正对镜头，则判定相机没有到达侧面机位。",
+      "保持平视对应的自然透视，不得加入与目标俯仰矛盾的顶视或底视特征。",
+      "中景：保持关注对象与周围环境都清晰可读，并呈现真实空间纵深。",
+      "Roll 为 0°：目标画面的地平线与零度基准一致，不得自行增加画框滚转。"
+    ],
+    "forbiddenShortcuts": [
+      "不得把任务执行成只修改关注对象而保留源图背景构图；这种结果视为失败。",
+      "不得对源图做二维旋转、镜像、卡片翻转、透视拉伸、剪贴或边缘扩图来伪装新机位。",
+      "不得复制姿态引导图的卡片、边框、底色、坐标轴、旋转环或预览外观。"
+    ],
+    "deterministicPromptZh": "【相机直绘｜中文】\n相机直绘版本：9.4｜移动相机并重拍整个场景\n任务类型：相机轨道重拍（camera-orbit recapture）。场景中的人物、物品、建筑与环境属于同一个三维世界；改变的是观察相机，不是把某个对象从原背景中抠出后原地转动。\n执行顺序：先围绕原图场景中心移动相机，再让镜头看回同一中心，最后从目标新视锥一次性渲染整张新照片；不得先冻结原图，再只修补局部。\n景别：中景。\n镜头：从原图机位向右环绕90.00°，平视，Roll 0°，地平线保持零度基准；目标为基准右侧机位、平视，方位角 +90.00°，俯仰角 0.00°；镜头始终对准原图中的同一场景中心。\n空间：移动相机后重新拍摄完整场景。前景、所有对象、中景、背景、地面、墙面、天花和画面边缘全部按新机位重建透视、尺度、视差、遮挡与构图；不能冻结原背景后只转动其中的人物、物品或局部。\n补全：画面随镜头转动。新视锥中原图没有拍到的对象结构和环境区域，依据原图的空间关系、环境风格、材质、光线与色彩合理想象并自然补全；新机位看不到的内容可以出画。\n连续性：保持原图中的对象身份与结构、同一现实瞬间、环境关系、材质、颜色、光线和整体风格，但不要沿用原图的二维投影、遮挡顺序或背景排布。\n视角验收：右侧视必须是真的 90° 侧面：相机位于场景中心正右方并朝左看回同一中心；原来正对镜头的大面积投影要明显收窄成边缘，右侧方向的新结构与环境纵深进入视野，背景也要产生对应的侧向视差。原图中正对镜头的圆盘、面板、屏幕、门板、网格、框架或其他宽平面都必须变成明显的窄边投影；只要它们仍大面积正对镜头，就说明相机没有到达 90° 侧面，必须按目标机位重建。采用自然平视，不要自行增加俯拍或仰拍效果。中景要让关注对象和周围环境都清楚可读，并保留真实空间纵深。\n禁止：镜像、二维旋转、卡片翻转、透视拉伸、剪贴、普通扩图，以及只改变单个对象角度而不重建整幅场景。",
+    "deterministicPromptEn": "[Direct camera recapture | English]\nCamera recapture protocol: 9.4 | move the camera and recapture the entire scene\nTask type: camera-orbit recapture. The people, objects, architecture, and environment belong to one 3D world. Change the viewing camera; do not cut out and rotate one element inside a frozen source background.\nExecution order: first orbit the camera around the source scene center, then aim the lens back at that same center, and finally render one complete new photograph through the target view frustum. Do not freeze the source image and patch only a local region.\nShot size: medium shot.\nCamera: orbit 90.00 degrees to the right from the source camera position, eye level, roll 0 degrees with the source horizon as the zero-roll reference; target view is strict right-side view, eye level, azimuth +90.00 degrees, elevation 0.00 degrees. Keep the lens aimed at the same scene center as in the source image.\nSpace: move the camera and recapture the complete scene. Rebuild the perspective, scale, parallax, occlusion, and composition of the foreground, every object, midground, background, ground, walls, ceiling, and frame edges from the new camera position. Do not freeze the source background and rotate only a person, object, or local region.\nCompletion: the image moves with the camera. Infer and naturally complete every object structure and environment region that enters the new view frustum but was not captured in the source, using the source spatial relationships, environment style, materials, lighting, and colors. Content outside the new view may leave the frame.\nContinuity: retain the identities and structures of the depicted elements, the same real-world moment, environment relationships, materials, colors, lighting, and overall style. Recompute the 2D projection, occlusion order, and background layout from the target camera instead of reusing those from the source image.\nAcceptance: This must be a strict 90-degree right-side camera view: place the camera directly to the right of the scene center and look back toward that center. Any large projection that faced the source camera must become a visibly narrow edge projection, newly visible rightward depth must enter the frame, and the background must show matching lateral parallax. Every source-facing disk, panel, screen, door, grille, frame, or other broad plane must become a clearly narrow edge projection. If any of them still broadly faces the camera, the camera has not reached the 90-degree side position and the view must be rebuilt. Use natural eye-level perspective without adding an unrequested high-angle or low-angle effect. For the medium shot, keep the scene focus and surrounding environment readable while preserving real spatial depth.\nReject: mirroring, 2D rotation, card flipping, perspective warping, cut-and-paste, ordinary outpainting, or changing only one object's angle without rebuilding the complete scene."
+  },
+  "renderPrompt": "[Direct camera recapture | English]\nCamera recapture protocol: 9.4 | move the camera and recapture the entire scene\nTask type: camera-orbit recapture. The people, objects, architecture, and environment belong to one 3D world. Change the viewing camera; do not cut out and rotate one element inside a frozen source background.\nExecution order: first orbit the camera around the source scene center, then aim the lens back at that same center, and finally render one complete new photograph through the target view frustum. Do not freeze the source image and patch only a local region.\nShot size: medium shot.\nCamera: orbit 90.00 degrees to the right from the source camera position, eye level, roll 0 degrees with the source horizon as the zero-roll reference; target view is strict right-side view, eye level, azimuth +90.00 degrees, elevation 0.00 degrees. Keep the lens aimed at the same scene center as in the source image.\nSpace: move the camera and recapture the complete scene. Rebuild the perspective, scale, parallax, occlusion, and composition of the foreground, every object, midground, background, ground, walls, ceiling, and frame edges from the new camera position. Do not freeze the source background and rotate only a person, object, or local region.\nCompletion: the image moves with the camera. Infer and naturally complete every object structure and environment region that enters the new view frustum but was not captured in the source, using the source spatial relationships, environment style, materials, lighting, and colors. Content outside the new view may leave the frame.\nContinuity: retain the identities and structures of the depicted elements, the same real-world moment, environment relationships, materials, colors, lighting, and overall style. Recompute the 2D projection, occlusion order, and background layout from the target camera instead of reusing those from the source image.\nAcceptance: This must be a strict 90-degree right-side camera view: place the camera directly to the right of the scene center and look back toward that center. Any large projection that faced the source camera must become a visibly narrow edge projection, newly visible rightward depth must enter the frame, and the background must show matching lateral parallax. Every source-facing disk, panel, screen, door, grille, frame, or other broad plane must become a clearly narrow edge projection. If any of them still broadly faces the camera, the camera has not reached the 90-degree side position and the view must be rebuilt. Use natural eye-level perspective without adding an unrequested high-angle or low-angle effect. For the medium shot, keep the scene focus and surrounding environment readable while preserving real spatial depth.\nReject: mirroring, 2D rotation, card flipping, perspective warping, cut-and-paste, ordinary outpainting, or changing only one object's angle without rebuilding the complete scene.\nInputs: image 1 is the factual reference for the depicted elements and complete environment. Image 2 is the rotated target-camera guide and only indicates camera direction, roll, composition, and shot size; do not copy its card, border, background color, or preview appearance.\n[gpt-5.6-sol visual facts | subordinate to the locked camera block]\nDetected category: person.\nIdentity, structure, material, lighting, and style facts:\n- Photorealistic soft-light portrait of a young East Asian woman with fair skin, gray-brown eyes, dark brown-black hair in a loose bun, wisps across the forehead and neck, delicate features, pale orange eye makeup, natural pink lips, and a white finely textured square-neck top. The new projection shows a clear facial contour with realistic overlap among the nose bridge, tip, lips, and jaw. Preserve natural window light, shallow depth of field, a beige-gray interior, and softly blurred wooden furniture.\n- Preserve the young East Asian woman’s soft oval face, fine straight brows, gray-brown eyes, slender nose, and natural pink lips.\n- Preserve the dark brown-black hair, loose high bun, long forehead wisps, and fine strands along the neck.\n- Preserve fair skin, fine natural skin texture, pale orange eye makeup, and restrained photorealistic retouching.\n- Preserve the white lightweight finely textured square-neck top without adding jewelry, text, or accessories.\nConservative completion plan for newly visible structures:\n- Extend the visible nose structure into a restrained bridge and nostril shape without exaggerating unseen contours.\n- Complete the rear head and bun volume from the visible hair mass, keeping internal wrapping details conservative.\n- Complete the farther brow, eye, cheek, and ear only where they are not naturally occluded.\n- Extend unseen clothing with the same white finely textured fabric and square-neck construction, adding no patterns.\nComplete environment continuity plan:\n- Keep the foreground clean, allowing only a few softly blurred loose hairs near the image edge.\n- Use the head, neck, shoulders, and white top as the midground, retaining shallow-depth separation.\n- Continue the beige-gray wall, bright window-side area, and distant wooden furniture as softly blurred background layers.\n- Keep the floor outside the visible area and fill uncovered space with a text-free interior blur containing no new objects.\nCategory-specific projection evidence:\n- The nose bridge, nose tip, upper and lower lips, and jawline form a continuous, clearly defined facial outline.\n- The nearer eyebrow, eye, cheekbone, ear, and hairline become more fully visible while the other eye is strongly foreshortened.\n- The loose bun, softly raised crown volume, and wispy neck hairs remain recognizable as layered structures.\n- The white square neckline, collarbones, and shoulders remain present, while the chest width is strongly compressed in projection.\nCategory-specific occlusion evidence:\n- The nose bridge and tip occlude the farther eye area and part of the cheek, leaving the farther brow and eye minimally visible or hidden.\n- The nearer cheek contour and loose strands partially overlap the ear, while hair behind the ear continues to cover part of the neck.\n- The bun overlaps the rear head hair, revealing only the visible outer layers of its wrapped structure.\n- The nearer shoulder and neckline edge occlude the farther shoulder, compressing the apparent torso width.\nUncertain details must use the most conservative completion:\n- The exact wrapping on the back of the bun is unseen and should be completed conservatively with a loose natural silhouette.\nThese visual facts may not redefine the camera, shot size, roll, framing, or target projection.\nExecution: move the virtual camera to the locked orbit position, then recapture the entire scene through the new view frustum. Treat image 1 as scene evidence, not as a frozen background. Reproject every depicted element and the environment from the new camera position.\nAdditional requirement: Continue the same real-world moment, spatial relationships, materials, lighting, colors, and visual style without adding unrelated concepts.\nOutput: return one clean, high-fidelity image photographed from the specified camera position. Do not show axes, rotation rings, guides, captions, or watermarks.",
+  "promptLanguage": "en",
+  "subjectCategory": "person",
+  "optimizedPrompt": "Photorealistic soft-light portrait of a young East Asian woman with fair skin, gray-brown eyes, dark brown-black hair in a loose bun, wisps across the forehead and neck, delicate features, pale orange eye makeup, natural pink lips, and a white finely textured square-neck top. The new projection shows a clear facial contour with realistic overlap among the nose bridge, tip, lips, and jaw. Preserve natural window light, shallow depth of field, a beige-gray interior, and softly blurred wooden furniture.",
+  "viewDescription": "Photorealistic soft-light portrait of a young East Asian woman with fair skin, gray-brown eyes, dark brown-black hair in a loose bun, wisps across the forehead and neck, delicate features, pale orange eye makeup, natural pink lips, and a white finely textured square-neck top. The new projection shows a clear facial contour with realistic overlap among the nose bridge, tip, lips, and jaw. Preserve natural window light, shallow depth of field, a beige-gray interior, and softly blurred wooden furniture.",
+  "sourceViewDescription": "A close photorealistic portrait of a young East Asian woman clearly showing a dark loose bun, gray-brown eyes, natural makeup, and a white finely textured square-neck top; soft window light illuminates her face against a strongly blurred interior.",
+  "targetViewDescription": "strict right-side view, eye level, medium shot, roll 0 degrees with the source horizon as the zero-roll reference",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "The nose bridge, nose tip, upper and lower lips, and jawline form a continuous, clearly defined facial outline.",
+    "The nearer eyebrow, eye, cheekbone, ear, and hairline become more fully visible while the other eye is strongly foreshortened.",
+    "The loose bun, softly raised crown volume, and wispy neck hairs remain recognizable as layered structures.",
+    "The white square neckline, collarbones, and shoulders remain present, while the chest width is strongly compressed in projection."
+  ],
+  "occlusionConstraints": [
+    "The nose bridge and tip occlude the farther eye area and part of the cheek, leaving the farther brow and eye minimally visible or hidden.",
+    "The nearer cheek contour and loose strands partially overlap the ear, while hair behind the ear continues to cover part of the neck.",
+    "The bun overlaps the rear head hair, revealing only the visible outer layers of its wrapped structure.",
+    "The nearer shoulder and neckline edge occlude the farther shoulder, compressing the apparent torso width."
+  ],
+  "identityConstraints": [
+    "Preserve the young East Asian woman’s soft oval face, fine straight brows, gray-brown eyes, slender nose, and natural pink lips.",
+    "Preserve the dark brown-black hair, loose high bun, long forehead wisps, and fine strands along the neck.",
+    "Preserve fair skin, fine natural skin texture, pale orange eye makeup, and restrained photorealistic retouching.",
+    "Preserve the white lightweight finely textured square-neck top without adding jewelry, text, or accessories."
+  ],
+  "hiddenSurfacePlan": [
+    "Extend the visible nose structure into a restrained bridge and nostril shape without exaggerating unseen contours.",
+    "Complete the rear head and bun volume from the visible hair mass, keeping internal wrapping details conservative.",
+    "Complete the farther brow, eye, cheek, and ear only where they are not naturally occluded.",
+    "Extend unseen clothing with the same white finely textured fabric and square-neck construction, adding no patterns."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean, allowing only a few softly blurred loose hairs near the image edge.",
+    "Use the head, neck, shoulders, and white top as the midground, retaining shallow-depth separation.",
+    "Continue the beige-gray wall, bright window-side area, and distant wooden furniture as softly blurred background layers.",
+    "Keep the floor outside the visible area and fill uncovered space with a text-free interior blur containing no new objects."
+  ],
+  "uncertaintyNotes": [
+    "The exact wrapping on the back of the bun is unseen and should be completed conservatively with a loose natural silhouette.",
+    "Visibility of the farther ear and shoulder should follow real occlusion rather than being forced into view."
+  ],
+  "reasoningModel": "gpt-5.6-sol",
+  "imageModel": "gpt-image-2",
+  "reasoningDurationMs": 36582,
+  "renderingDurationMs": 62275,
+  "totalDurationMs": 98866
+}

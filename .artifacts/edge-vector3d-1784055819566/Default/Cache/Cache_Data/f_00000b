@@ -1,0 +1,1123 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/components/vector3d/Vector3DViewpointWorkbench.tsx");import __vite__cjsImport0_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=e0f4fb9d"; const Fragment = __vite__cjsImport0_react_jsxDevRuntime["Fragment"]; const jsxDEV = __vite__cjsImport0_react_jsxDevRuntime["jsxDEV"];
+var _s = $RefreshSig$();
+import {
+  AlertTriangle,
+  Camera,
+  Check,
+  Download,
+  FileImage,
+  FolderOpen,
+  Image as ImageIcon,
+  LoaderCircle,
+  Orbit,
+  RotateCcw,
+  Sparkles,
+  Upload
+} from "/node_modules/.vite/deps/lucide-react.js?v=e0f4fb9d";
+import __vite__cjsImport2_react from "/node_modules/.vite/deps/react.js?v=e0f4fb9d"; const useEffect = __vite__cjsImport2_react["useEffect"]; const useMemo = __vite__cjsImport2_react["useMemo"]; const useRef = __vite__cjsImport2_react["useRef"]; const useState = __vite__cjsImport2_react["useState"];
+import { VECTOR3D_VIEW_LIMITS } from "/src/domain/index.ts";
+import {
+  generateVector3DView,
+  Vector3DViewpointApiError
+} from "/src/services/vector3d-viewpoint-service.ts";
+import {
+  GaussianSplatViewport
+} from "/src/components/vector3d/GaussianSplatViewport.tsx";
+const DEFAULT_CAMERA = {
+  yaw: 0,
+  pitch: 0,
+  distance: 5,
+  position: { x: 0, y: 0, z: -5 },
+  rotation: { x: 0, y: 0, z: 0 },
+  viewport: { width: 1, height: 1 }
+};
+export function Vector3DViewpointWorkbench(props) {
+  _s();
+  const plyInputRef = useRef(null);
+  const sourceInputRef = useRef(null);
+  const viewportRef = useRef(null);
+  const abortRef = useRef(void 0);
+  const [plyFile, setPlyFile] = useState();
+  const [sourceImage, setSourceImage] = useState();
+  const [loadState, setLoadState] = useState({
+    status: "idle",
+    progress: 0
+  });
+  const [camera, setCamera] = useState(DEFAULT_CAMERA);
+  const [draftImage, setDraftImage] = useState();
+  const [draftCamera, setDraftCamera] = useState();
+  const [result, setResult] = useState();
+  const [analysis, setAnalysis] = useState();
+  const [status, setStatus] = useState("idle");
+  const [statusMessage, setStatusMessage] = useState("等待捕获新视角");
+  const [error, setError] = useState();
+  const imageModels = useMemo(
+    () => props.models.filter(
+      (model) => model.enabled && model.editCapabilities.supportsWholeImageEdit && (model.id === "gpt-image-2" || model.apiModelName.toLowerCase().includes("gpt-image-2"))
+    ),
+    [props.models]
+  );
+  const activeImageModel = imageModels.find((model) => model.id === props.selectedModel?.id);
+  useEffect(() => {
+    if (!activeImageModel && imageModels[0]) {
+      props.onSelectModel(imageModels[0].id);
+    }
+  }, [activeImageModel, imageModels, props.onSelectModel]);
+  useEffect(() => () => abortRef.current?.abort(), []);
+  const busy = status === "reasoning" || status === "rendering";
+  const canCapture = loadState.status === "ready" && !busy;
+  const canGenerate = Boolean(
+    sourceImage && draftImage && draftCamera && activeImageModel && props.endpointOverride?.apiKey?.trim() && !busy
+  );
+  const handleSourceImage = async (file) => {
+    setError(void 0);
+    if (!file) {
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("原始参考图仅支持 PNG、JPEG 或 WebP。");
+      return;
+    }
+    if (file.size > VECTOR3D_VIEW_LIMITS.sourceImageBytes) {
+      setError("原始参考图不能超过 20 MB。");
+      return;
+    }
+    try {
+      setSourceImage({
+        name: file.name,
+        dataURL: await fileToDataURL(file),
+        sizeBytes: file.size
+      });
+      setResult(void 0);
+      setAnalysis(void 0);
+    } catch {
+      setError("原始参考图读取失败。");
+    }
+  };
+  const handlePLYFile = (file) => {
+    setError(void 0);
+    if (!file) {
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".ply")) {
+      setError("3D 模型必须是 .ply 格式的 Gaussian Splatting 文件。");
+      return;
+    }
+    if (file.size > VECTOR3D_VIEW_LIMITS.plyFileBytes) {
+      setError("PLY 文件不能超过 1 GB。");
+      return;
+    }
+    setPlyFile(file);
+    setDraftImage(void 0);
+    setDraftCamera(void 0);
+    setResult(void 0);
+    setAnalysis(void 0);
+    setStatus("idle");
+    setStatusMessage("PLY 正在载入");
+  };
+  const handleCapture = () => {
+    setError(void 0);
+    try {
+      const snapshot = viewportRef.current?.capture();
+      if (!snapshot) {
+        throw new Error("3D 视口尚未就绪。");
+      }
+      setDraftImage(snapshot.image);
+      setDraftCamera(snapshot.camera);
+      setCamera(snapshot.camera);
+      setResult(void 0);
+      setAnalysis(void 0);
+      setStatus("captured");
+      setStatusMessage("已捕获当前相机矩阵与 3DGS 草图");
+    } catch (captureError) {
+      setError(captureError instanceof Error ? captureError.message : "当前镜头捕获失败。");
+    }
+  };
+  const handleGenerate = async () => {
+    if (!sourceImage || !draftImage || !draftCamera || !activeImageModel || !canGenerate) {
+      return;
+    }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setError(void 0);
+    setResult(void 0);
+    setAnalysis(void 0);
+    setStatus("reasoning");
+    setStatusMessage("gpt-5.5 正在分析三维几何与形变补偿");
+    try {
+      const generated = await generateVector3DView(
+        {
+          requestId: crypto.randomUUID(),
+          source_image: sourceImage.dataURL,
+          draft_image: draftImage,
+          camera_parameters: draftCamera,
+          reasoning_model: "gpt-5.5",
+          image_model: activeImageModel.apiModelName,
+          endpoint_override: props.endpointOverride
+        },
+        {
+          onStage: (nextStage, message, nextAnalysis) => {
+            setStatus(nextStage);
+            setStatusMessage(message);
+            if (nextAnalysis) {
+              setAnalysis(nextAnalysis);
+            }
+          }
+        },
+        controller.signal
+      );
+      setResult(generated);
+      setAnalysis(generated);
+      setStatus("success");
+      setStatusMessage("电影级新视角重塑完成");
+    } catch (generationError) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      setStatus("failed");
+      setStatusMessage("双模型管线执行失败");
+      setError(
+        generationError instanceof Vector3DViewpointApiError || generationError instanceof Error ? generationError.message : "3D 视角重塑失败。"
+      );
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = void 0;
+      }
+    }
+  };
+  const handleDownload = () => {
+    if (!result?.image) {
+      return;
+    }
+    const anchor = document.createElement("a");
+    anchor.href = result.image;
+    anchor.download = `vector3d-view-${Date.now()}.png`;
+    anchor.rel = "noreferrer";
+    anchor.click();
+  };
+  return /* @__PURE__ */ jsxDEV("section", { className: "vector3d-workbench", "aria-label": "Vector3D Viewpoint 工作台", children: [
+    /* @__PURE__ */ jsxDEV("header", { className: "vector3d-pipeline-bar", children: [
+      /* @__PURE__ */ jsxDEV("div", { className: "vector3d-pipeline-identity", children: [
+        /* @__PURE__ */ jsxDEV(Orbit, { size: 19 }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 270,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { children: [
+          /* @__PURE__ */ jsxDEV("strong", { children: "Vector3D-Viewpoint" }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 272,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("span", { children: "3DGS CAMERA PIPELINE" }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 273,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 271,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 269,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("div", { className: "vector3d-model-route", children: [
+        /* @__PURE__ */ jsxDEV("span", { children: "空间推理" }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 278,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("strong", { children: "gpt-5.5" }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 279,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("i", {}, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 280,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: "图像重塑" }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 281,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV(
+          "select",
+          {
+            "aria-label": "图像重塑模型",
+            disabled: busy || imageModels.length === 0,
+            onChange: (event) => props.onSelectModel(event.target.value),
+            value: activeImageModel?.id ?? "",
+            children: imageModels.map(
+              (model) => /* @__PURE__ */ jsxDEV("option", { value: model.id, children: model.displayName }, model.id, false, {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 289,
+                columnNumber: 13
+              }, this)
+            )
+          },
+          void 0,
+          false,
+          {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 282,
+            columnNumber: 11
+          },
+          this
+        )
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 277,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV(
+        "div",
+        {
+          className: `vector3d-api-state${props.endpointOverride?.apiKey ? " is-ready" : ""}`,
+          title: props.endpointOverride?.apiKey ? "API Key 已配置" : "请在设置中配置 API Key",
+          children: [
+            /* @__PURE__ */ jsxDEV("span", {}, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 300,
+              columnNumber: 11
+            }, this),
+            props.endpointOverride?.apiKey ? "API READY" : "API KEY MISSING"
+          ]
+        },
+        void 0,
+        true,
+        {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 296,
+          columnNumber: 9
+        },
+        this
+      )
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 268,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "vector3d-progress-rail", "aria-label": "生成进度", children: [
+      /* @__PURE__ */ jsxDEV(
+        ProgressStep,
+        {
+          active: status === "captured",
+          complete: Boolean(draftImage),
+          index: "01",
+          label: "捕获相机矩阵"
+        },
+        void 0,
+        false,
+        {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 306,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV(
+        ProgressStep,
+        {
+          active: status === "reasoning",
+          complete: status === "rendering" || status === "success",
+          index: "02",
+          label: "空间与形变分析"
+        },
+        void 0,
+        false,
+        {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 312,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV(
+        ProgressStep,
+        {
+          active: status === "rendering",
+          complete: status === "success",
+          index: "03",
+          label: "电影级细节重塑"
+        },
+        void 0,
+        false,
+        {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 318,
+          columnNumber: 9
+        },
+        this
+      ),
+      /* @__PURE__ */ jsxDEV("div", { className: `vector3d-live-status status-${status}`, children: [
+        busy && /* @__PURE__ */ jsxDEV(LoaderCircle, { className: "spin", size: 15 }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 325,
+          columnNumber: 20
+        }, this),
+        status === "success" && /* @__PURE__ */ jsxDEV(Check, { size: 15 }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 326,
+          columnNumber: 36
+        }, this),
+        /* @__PURE__ */ jsxDEV("span", { children: statusMessage }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 327,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 324,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 305,
+      columnNumber: 7
+    }, this),
+    error && /* @__PURE__ */ jsxDEV("div", { className: "vector3d-error", role: "alert", children: [
+      /* @__PURE__ */ jsxDEV(AlertTriangle, { size: 16 }, void 0, false, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 333,
+        columnNumber: 11
+      }, this),
+      /* @__PURE__ */ jsxDEV("span", { children: error }, void 0, false, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 334,
+        columnNumber: 11
+      }, this)
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 332,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "vector3d-main-grid", children: [
+      /* @__PURE__ */ jsxDEV("section", { className: "vector3d-viewport-panel", children: [
+        /* @__PURE__ */ jsxDEV("header", { className: "vector3d-panel-header", children: [
+          /* @__PURE__ */ jsxDEV("div", { children: [
+            /* @__PURE__ */ jsxDEV("span", { children: "LIVE SCENE" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 342,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: plyFile?.name ?? "未载入 PLY 场景" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 343,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 341,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "vector3d-file-actions", children: [
+            /* @__PURE__ */ jsxDEV(
+              "input",
+              {
+                accept: ".ply",
+                className: "visually-hidden",
+                onChange: (event) => handlePLYFile(event.target.files?.[0]),
+                ref: plyInputRef,
+                type: "file"
+              },
+              void 0,
+              false,
+              {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 346,
+                columnNumber: 15
+              },
+              this
+            ),
+            /* @__PURE__ */ jsxDEV(
+              "input",
+              {
+                accept: "image/png,image/jpeg,image/webp",
+                className: "visually-hidden",
+                onChange: (event) => void handleSourceImage(event.target.files?.[0]),
+                ref: sourceInputRef,
+                type: "file"
+              },
+              void 0,
+              false,
+              {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 353,
+                columnNumber: 15
+              },
+              this
+            ),
+            /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "vector3d-tool-button",
+                disabled: busy,
+                onClick: () => plyInputRef.current?.click(),
+                title: "载入 3DGS PLY",
+                type: "button",
+                children: [
+                  /* @__PURE__ */ jsxDEV(FolderOpen, { size: 15 }, void 0, false, {
+                    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                    lineNumber: 367,
+                    columnNumber: 17
+                  }, this),
+                  /* @__PURE__ */ jsxDEV("span", { children: "PLY" }, void 0, false, {
+                    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                    lineNumber: 368,
+                    columnNumber: 17
+                  }, this)
+                ]
+              },
+              void 0,
+              true,
+              {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 360,
+                columnNumber: 15
+              },
+              this
+            ),
+            /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: `vector3d-tool-button${sourceImage ? " is-ready" : ""}`,
+                disabled: busy,
+                onClick: () => sourceInputRef.current?.click(),
+                title: "载入原始高清参考图",
+                type: "button",
+                children: [
+                  /* @__PURE__ */ jsxDEV(FileImage, { size: 15 }, void 0, false, {
+                    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                    lineNumber: 377,
+                    columnNumber: 17
+                  }, this),
+                  /* @__PURE__ */ jsxDEV("span", { children: "原图" }, void 0, false, {
+                    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                    lineNumber: 378,
+                    columnNumber: 17
+                  }, this)
+                ]
+              },
+              void 0,
+              true,
+              {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 370,
+                columnNumber: 15
+              },
+              this
+            )
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 345,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 340,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "vector3d-viewport-shell", children: [
+          /* @__PURE__ */ jsxDEV(
+            GaussianSplatViewport,
+            {
+              file: plyFile,
+              onCameraChange: setCamera,
+              onLoadStateChange: (nextState) => {
+                setLoadState(nextState);
+                if (nextState.status === "ready") {
+                  setStatusMessage("场景已就绪，可捕获当前镜头");
+                } else if (nextState.status === "failed") {
+                  setError(nextState.error);
+                }
+              },
+              ref: viewportRef
+            },
+            void 0,
+            false,
+            {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 384,
+              columnNumber: 13
+            },
+            this
+          ),
+          loadState.status !== "ready" && /* @__PURE__ */ jsxDEV("div", { className: `vector3d-viewport-overlay is-${loadState.status}`, children: loadState.status === "loading" ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
+            /* @__PURE__ */ jsxDEV(LoaderCircle, { className: "spin", size: 25 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 403,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: [
+              loadState.progress,
+              "%"
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 404,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "解析 Gaussian Splatting 点云" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 405,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 402,
+            columnNumber: 15
+          }, this) : loadState.status === "failed" ? /* @__PURE__ */ jsxDEV(Fragment, { children: [
+            /* @__PURE__ */ jsxDEV(AlertTriangle, { size: 25 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 409,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: "PLY LOAD FAILED" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 410,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 408,
+            columnNumber: 15
+          }, this) : /* @__PURE__ */ jsxDEV(Fragment, { children: [
+            /* @__PURE__ */ jsxDEV(Upload, { size: 25 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 414,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: "LOAD 3DGS PLY" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 415,
+              columnNumber: 21
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: "等待本地高斯泼溅场景" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 416,
+              columnNumber: 21
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 413,
+            columnNumber: 15
+          }, this) }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 400,
+            columnNumber: 13
+          }, this),
+          sourceImage && /* @__PURE__ */ jsxDEV("div", { className: "vector3d-source-chip", title: sourceImage.name, children: [
+            /* @__PURE__ */ jsxDEV("img", { alt: "原始高清参考图", src: sourceImage.dataURL }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 424,
+              columnNumber: 17
+            }, this),
+            /* @__PURE__ */ jsxDEV("div", { children: [
+              /* @__PURE__ */ jsxDEV("span", { children: "SOURCE LOCKED" }, void 0, false, {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 426,
+                columnNumber: 19
+              }, this),
+              /* @__PURE__ */ jsxDEV("strong", { children: sourceImage.name }, void 0, false, {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 427,
+                columnNumber: 19
+              }, this)
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 425,
+              columnNumber: 17
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 423,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 383,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("div", { className: "vector3d-camera-console", children: [
+          /* @__PURE__ */ jsxDEV(CameraAxis, { label: "YAW / 方位角", max: 180, min: -180, value: camera.yaw }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 434,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV(CameraAxis, { label: "PITCH / 极角", max: 90, min: -90, value: camera.pitch }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 435,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV("div", { className: "vector3d-distance-readout", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: "DISTANCE" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 437,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: camera.distance.toFixed(2) }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 438,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 436,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 433,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("footer", { className: "vector3d-viewport-actions", children: [
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              className: "vector3d-icon-button",
+              disabled: busy,
+              onClick: () => viewportRef.current?.resetCamera(),
+              title: "重置相机",
+              type: "button",
+              children: /* @__PURE__ */ jsxDEV(RotateCcw, { size: 17 }, void 0, false, {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 450,
+                columnNumber: 15
+              }, this)
+            },
+            void 0,
+            false,
+            {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 443,
+              columnNumber: 13
+            },
+            this
+          ),
+          /* @__PURE__ */ jsxDEV("div", { className: "vector3d-scene-facts", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: loadState.pointCount ? `${loadState.pointCount.toLocaleString()} SPLATS` : "NO SCENE" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 453,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              camera.viewport.width,
+              " × ",
+              camera.viewport.height
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 454,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 452,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              className: "vector3d-capture-button",
+              disabled: !canCapture,
+              onClick: handleCapture,
+              type: "button",
+              children: [
+                /* @__PURE__ */ jsxDEV(Camera, { size: 17 }, void 0, false, {
+                  fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                  lineNumber: 462,
+                  columnNumber: 15
+                }, this),
+                "捕获当前镜头"
+              ]
+            },
+            void 0,
+            true,
+            {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 456,
+              columnNumber: 13
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 442,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 339,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("section", { className: "vector3d-output-stack", children: [
+        /* @__PURE__ */ jsxDEV(
+          OutputPanel,
+          {
+            badge: "DRAFT / 3DGS",
+            emptyIcon: /* @__PURE__ */ jsxDEV(ImageIcon, { size: 27 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 471,
+              columnNumber: 24
+            }, this),
+            emptyLabel: "等待捕获粗糙草图",
+            image: draftImage,
+            title: "当前视角结构骨架"
+          },
+          void 0,
+          false,
+          {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 469,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV(
+          OutputPanel,
+          {
+            actions: result ? /* @__PURE__ */ jsxDEV(
+              "button",
+              {
+                className: "vector3d-icon-button",
+                onClick: handleDownload,
+                title: "下载重塑结果",
+                type: "button",
+                children: /* @__PURE__ */ jsxDEV(Download, { size: 17 }, void 0, false, {
+                  fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                  lineNumber: 486,
+                  columnNumber: 19
+                }, this)
+              },
+              void 0,
+              false,
+              {
+                fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                lineNumber: 480,
+                columnNumber: 13
+              },
+              this
+            ) : void 0,
+            badge: "FINAL / GPT-IMAGE-2",
+            emptyIcon: busy ? /* @__PURE__ */ jsxDEV(LoaderCircle, { className: "spin", size: 27 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 491,
+              columnNumber: 31
+            }, this) : /* @__PURE__ */ jsxDEV(Sparkles, { size: 27 }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 491,
+              columnNumber: 77
+            }, this),
+            emptyLabel: busy ? statusMessage : "等待电影级重塑结果",
+            image: result?.image,
+            title: "材质与盲区重塑"
+          },
+          void 0,
+          false,
+          {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 477,
+            columnNumber: 11
+          },
+          this
+        ),
+        /* @__PURE__ */ jsxDEV("div", { className: "vector3d-generation-console", children: [
+          /* @__PURE__ */ jsxDEV("div", { className: "vector3d-generate-copy", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: "VIEWPOINT" }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 499,
+              columnNumber: 15
+            }, this),
+            /* @__PURE__ */ jsxDEV("strong", { children: analysis?.viewDescription ?? formatViewDescription(draftCamera ?? camera) }, void 0, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 500,
+              columnNumber: 15
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 498,
+            columnNumber: 13
+          }, this),
+          /* @__PURE__ */ jsxDEV(
+            "button",
+            {
+              className: "vector3d-generate-button",
+              disabled: !canGenerate,
+              onClick: () => void handleGenerate(),
+              type: "button",
+              children: [
+                busy ? /* @__PURE__ */ jsxDEV(LoaderCircle, { className: "spin", size: 17 }, void 0, false, {
+                  fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                  lineNumber: 508,
+                  columnNumber: 23
+                }, this) : /* @__PURE__ */ jsxDEV(Sparkles, { size: 17 }, void 0, false, {
+                  fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+                  lineNumber: 508,
+                  columnNumber: 69
+                }, this),
+                busy ? "双模型协作中" : "生成电影级新视角"
+              ]
+            },
+            void 0,
+            true,
+            {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 502,
+              columnNumber: 13
+            },
+            this
+          )
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 497,
+          columnNumber: 11
+        }, this),
+        analysis && /* @__PURE__ */ jsxDEV("details", { className: "vector3d-analysis-details", children: [
+          /* @__PURE__ */ jsxDEV("summary", { children: [
+            "空间修复计划 · ",
+            analysis.repairNotes.length,
+            " 项补偿"
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 515,
+            columnNumber: 15
+          }, this),
+          /* @__PURE__ */ jsxDEV("p", { children: analysis.optimizedPrompt }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 516,
+            columnNumber: 15
+          }, this),
+          analysis.repairNotes.length > 0 && /* @__PURE__ */ jsxDEV("ul", { children: analysis.repairNotes.map(
+            (note, index) => /* @__PURE__ */ jsxDEV("li", { children: note }, `${index}-${note}`, false, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 520,
+              columnNumber: 15
+            }, this)
+          ) }, void 0, false, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 518,
+            columnNumber: 13
+          }, this),
+          result && /* @__PURE__ */ jsxDEV("div", { className: "vector3d-timing-row", children: [
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              "推理 ",
+              (result.reasoningDurationMs / 1e3).toFixed(1),
+              "s"
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 526,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              "渲染 ",
+              (result.renderingDurationMs / 1e3).toFixed(1),
+              "s"
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 527,
+              columnNumber: 19
+            }, this),
+            /* @__PURE__ */ jsxDEV("span", { children: [
+              "总计 ",
+              (result.totalDurationMs / 1e3).toFixed(1),
+              "s"
+            ] }, void 0, true, {
+              fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+              lineNumber: 528,
+              columnNumber: 19
+            }, this)
+          ] }, void 0, true, {
+            fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+            lineNumber: 525,
+            columnNumber: 13
+          }, this)
+        ] }, void 0, true, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 514,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 468,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 338,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+    lineNumber: 267,
+    columnNumber: 5
+  }, this);
+}
+_s(Vector3DViewpointWorkbench, "fVFVTd0IqVvckkrKE/aNKeiHIi4=");
+_c = Vector3DViewpointWorkbench;
+function ProgressStep(props) {
+  return /* @__PURE__ */ jsxDEV("div", { className: `vector3d-progress-step${props.active ? " is-active" : ""}${props.complete ? " is-complete" : ""}`, children: [
+    /* @__PURE__ */ jsxDEV("span", { children: props.complete ? /* @__PURE__ */ jsxDEV(Check, { size: 12 }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 547,
+      columnNumber: 31
+    }, this) : props.index }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 547,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("strong", { children: props.label }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 548,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+    lineNumber: 546,
+    columnNumber: 5
+  }, this);
+}
+_c2 = ProgressStep;
+function CameraAxis(props) {
+  const percent = (props.value - props.min) / (props.max - props.min) * 100;
+  return /* @__PURE__ */ jsxDEV("div", { className: "vector3d-camera-axis", children: [
+    /* @__PURE__ */ jsxDEV("div", { children: [
+      /* @__PURE__ */ jsxDEV("span", { children: props.label }, void 0, false, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 564,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ jsxDEV("strong", { children: formatAngle(props.value) }, void 0, false, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 565,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 563,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "vector3d-axis-track", children: /* @__PURE__ */ jsxDEV("i", { style: { left: `${Math.min(100, Math.max(0, percent))}%` } }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 568,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 567,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+    lineNumber: 562,
+    columnNumber: 5
+  }, this);
+}
+_c3 = CameraAxis;
+function OutputPanel(props) {
+  return /* @__PURE__ */ jsxDEV("section", { className: "vector3d-output-panel", children: [
+    /* @__PURE__ */ jsxDEV("header", { children: [
+      /* @__PURE__ */ jsxDEV("div", { children: [
+        /* @__PURE__ */ jsxDEV("span", { children: props.badge }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 586,
+          columnNumber: 11
+        }, this),
+        /* @__PURE__ */ jsxDEV("strong", { children: props.title }, void 0, false, {
+          fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+          lineNumber: 587,
+          columnNumber: 11
+        }, this)
+      ] }, void 0, true, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 585,
+        columnNumber: 9
+      }, this),
+      props.actions
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 584,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ jsxDEV("div", { className: "vector3d-image-stage", children: props.image ? /* @__PURE__ */ jsxDEV("img", { alt: props.title, src: props.image }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 593,
+      columnNumber: 9
+    }, this) : /* @__PURE__ */ jsxDEV("div", { className: "vector3d-output-empty", children: [
+      props.emptyIcon,
+      /* @__PURE__ */ jsxDEV("span", { children: props.emptyLabel }, void 0, false, {
+        fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+        lineNumber: 597,
+        columnNumber: 13
+      }, this)
+    ] }, void 0, true, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 595,
+      columnNumber: 9
+    }, this) }, void 0, false, {
+      fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+      lineNumber: 591,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx",
+    lineNumber: 583,
+    columnNumber: 5
+  }, this);
+}
+_c4 = OutputPanel;
+function formatAngle(value) {
+  const normalized = Math.abs(value) < 5e-3 ? 0 : value;
+  return `${normalized >= 0 ? "+" : ""}${normalized.toFixed(1)}°`;
+}
+function formatViewDescription(camera) {
+  const horizontal = Math.abs(camera.yaw) < 15 ? "正面" : Math.abs(camera.yaw) > 165 ? "背面" : camera.yaw > 0 ? `右侧 ${Math.abs(camera.yaw).toFixed(0)}°` : `左侧 ${Math.abs(camera.yaw).toFixed(0)}°`;
+  const vertical = Math.abs(camera.pitch) < 8 ? "平视" : camera.pitch > 0 ? `俯视 ${camera.pitch.toFixed(0)}°` : `仰视 ${Math.abs(camera.pitch).toFixed(0)}°`;
+  return `${horizontal} · ${vertical}`;
+}
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("文件读取结果无效。"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("文件读取失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+var _c, _c2, _c3, _c4;
+$RefreshReg$(_c, "Vector3DViewpointWorkbench");
+$RefreshReg$(_c2, "ProgressStep");
+$RefreshReg$(_c3, "CameraAxis");
+$RefreshReg$(_c4, "OutputPanel");
+import * as RefreshRuntime from "/@react-refresh";
+const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
+if (import.meta.hot && !inWebWorker) {
+  if (!window.$RefreshReg$) {
+    throw new Error(
+      "@vitejs/plugin-react can't detect preamble. Something is wrong."
+    );
+  }
+  RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
+    RefreshRuntime.registerExportsForReactRefresh("L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx", currentExports);
+    import.meta.hot.accept((nextExports) => {
+      if (!nextExports) return;
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate("L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx", currentExports, nextExports);
+      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
+    });
+  });
+}
+function $RefreshReg$(type, id) {
+  return RefreshRuntime.register(type, "L:/AIProject/api2img/src/components/vector3d/Vector3DViewpointWorkbench.tsx " + id);
+}
+function $RefreshSig$() {
+  return RefreshRuntime.createSignatureFunctionForTransform();
+}
+
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBNlFVLFNBb0lRLFVBcElSOztBQTdRVjtBQUFBLEVBQ0VBO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDLFNBQVNDO0FBQUFBLEVBQ1RDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLEVBQ0FDO0FBQUFBLE9BQ0s7QUFDUCxTQUFTQyxXQUFXQyxTQUFTQyxRQUFRQyxnQkFBZ0M7QUFTckUsU0FBU0MsNEJBQTRCO0FBQ3JDO0FBQUEsRUFDRUM7QUFBQUEsRUFDQUM7QUFBQUEsT0FDSztBQUNQO0FBQUEsRUFDRUM7QUFBQUEsT0FHSztBQXNCUCxNQUFNQyxpQkFBMkM7QUFBQSxFQUMvQ0MsS0FBSztBQUFBLEVBQ0xDLE9BQU87QUFBQSxFQUNQQyxVQUFVO0FBQUEsRUFDVkMsVUFBVSxFQUFFQyxHQUFHLEdBQUdDLEdBQUcsR0FBR0MsR0FBRyxHQUFHO0FBQUEsRUFDOUJDLFVBQVUsRUFBRUgsR0FBRyxHQUFHQyxHQUFHLEdBQUdDLEdBQUcsRUFBRTtBQUFBLEVBQzdCRSxVQUFVLEVBQUVDLE9BQU8sR0FBR0MsUUFBUSxFQUFFO0FBQ2xDO0FBRU8sZ0JBQVNDLDJCQUEyQkMsT0FBd0M7QUFBQUMsS0FBQTtBQUNqRixRQUFNQyxjQUFjckIsT0FBZ0MsSUFBSTtBQUN4RCxRQUFNc0IsaUJBQWlCdEIsT0FBZ0MsSUFBSTtBQUMzRCxRQUFNdUIsY0FBY3ZCLE9BQTJDLElBQUk7QUFDbkUsUUFBTXdCLFdBQVd4QixPQUFvQ3lCLE1BQVM7QUFDOUQsUUFBTSxDQUFDQyxTQUFTQyxVQUFVLElBQUkxQixTQUFlO0FBQzdDLFFBQU0sQ0FBQzJCLGFBQWFDLGNBQWMsSUFBSTVCLFNBQTJCO0FBQ2pFLFFBQU0sQ0FBQzZCLFdBQVdDLFlBQVksSUFBSTlCLFNBQWlDO0FBQUEsSUFDakUrQixRQUFRO0FBQUEsSUFDUkMsVUFBVTtBQUFBLEVBQ1osQ0FBQztBQUNELFFBQU0sQ0FBQ0MsUUFBUUMsU0FBUyxJQUFJbEMsU0FBU0ssY0FBYztBQUNuRCxRQUFNLENBQUM4QixZQUFZQyxhQUFhLElBQUlwQyxTQUFpQjtBQUNyRCxRQUFNLENBQUNxQyxhQUFhQyxjQUFjLElBQUl0QyxTQUFtQztBQUN6RSxRQUFNLENBQUN1QyxRQUFRQyxTQUFTLElBQUl4QyxTQUFxQztBQUNqRSxRQUFNLENBQUN5QyxVQUFVQyxXQUFXLElBQUkxQyxTQUFpQztBQUNqRSxRQUFNLENBQUMrQixRQUFRWSxTQUFTLElBQUkzQyxTQUEwQixNQUFNO0FBQzVELFFBQU0sQ0FBQzRDLGVBQWVDLGdCQUFnQixJQUFJN0MsU0FBUyxTQUFTO0FBQzVELFFBQU0sQ0FBQzhDLE9BQU9DLFFBQVEsSUFBSS9DLFNBQWlCO0FBRTNDLFFBQU1nRCxjQUFjbEQ7QUFBQUEsSUFDbEIsTUFDRW9CLE1BQU0rQixPQUFPQztBQUFBQSxNQUNYLENBQUNDLFVBQ0NBLE1BQU1DLFdBQ05ELE1BQU1FLGlCQUFpQkMsMkJBQ3RCSCxNQUFNSSxPQUFPLGlCQUFpQkosTUFBTUssYUFBYUMsWUFBWSxFQUFFQyxTQUFTLGFBQWE7QUFBQSxJQUMxRjtBQUFBLElBQ0YsQ0FBQ3hDLE1BQU0rQixNQUFNO0FBQUEsRUFDZjtBQUNBLFFBQU1VLG1CQUFtQlgsWUFBWVksS0FBSyxDQUFDVCxVQUFVQSxNQUFNSSxPQUFPckMsTUFBTTJDLGVBQWVOLEVBQUU7QUFFekYxRCxZQUFVLE1BQU07QUFDZCxRQUFJLENBQUM4RCxvQkFBb0JYLFlBQVksQ0FBQyxHQUFHO0FBQ3ZDOUIsWUFBTTRDLGNBQWNkLFlBQVksQ0FBQyxFQUFFTyxFQUFFO0FBQUEsSUFDdkM7QUFBQSxFQUNGLEdBQUcsQ0FBQ0ksa0JBQWtCWCxhQUFhOUIsTUFBTTRDLGFBQWEsQ0FBQztBQUV2RGpFLFlBQVUsTUFBTSxNQUFNMEIsU0FBU3dDLFNBQVNDLE1BQU0sR0FBRyxFQUFFO0FBRW5ELFFBQU1DLE9BQU9sQyxXQUFXLGVBQWVBLFdBQVc7QUFDbEQsUUFBTW1DLGFBQWFyQyxVQUFVRSxXQUFXLFdBQVcsQ0FBQ2tDO0FBQ3BELFFBQU1FLGNBQWNDO0FBQUFBLElBQ2xCekMsZUFDRVEsY0FDQUUsZUFDQXNCLG9CQUNBekMsTUFBTW1ELGtCQUFrQkMsUUFBUUMsS0FBSyxLQUNyQyxDQUFDTjtBQUFBQSxFQUNMO0FBRUEsUUFBTU8sb0JBQW9CLE9BQU9DLFNBQWdCO0FBQy9DMUIsYUFBU3ZCLE1BQVM7QUFFbEIsUUFBSSxDQUFDaUQsTUFBTTtBQUNUO0FBQUEsSUFDRjtBQUVBLFFBQUksQ0FBQyxDQUFDLGFBQWEsY0FBYyxZQUFZLEVBQUVmLFNBQVNlLEtBQUtDLElBQUksR0FBRztBQUNsRTNCLGVBQVMsMkJBQTJCO0FBQ3BDO0FBQUEsSUFDRjtBQUVBLFFBQUkwQixLQUFLRSxPQUFPMUUscUJBQXFCMkUsa0JBQWtCO0FBQ3JEN0IsZUFBUyxrQkFBa0I7QUFDM0I7QUFBQSxJQUNGO0FBRUEsUUFBSTtBQUNGbkIscUJBQWU7QUFBQSxRQUNiaUQsTUFBTUosS0FBS0k7QUFBQUEsUUFDWEMsU0FBUyxNQUFNQyxjQUFjTixJQUFJO0FBQUEsUUFDakNPLFdBQVdQLEtBQUtFO0FBQUFBLE1BQ2xCLENBQUM7QUFDRG5DLGdCQUFVaEIsTUFBUztBQUNuQmtCLGtCQUFZbEIsTUFBUztBQUFBLElBQ3ZCLFFBQVE7QUFDTnVCLGVBQVMsWUFBWTtBQUFBLElBQ3ZCO0FBQUEsRUFDRjtBQUVBLFFBQU1rQyxnQkFBZ0JBLENBQUNSLFNBQWdCO0FBQ3JDMUIsYUFBU3ZCLE1BQVM7QUFFbEIsUUFBSSxDQUFDaUQsTUFBTTtBQUNUO0FBQUEsSUFDRjtBQUVBLFFBQUksQ0FBQ0EsS0FBS0ksS0FBS3BCLFlBQVksRUFBRXlCLFNBQVMsTUFBTSxHQUFHO0FBQzdDbkMsZUFBUywwQ0FBMEM7QUFDbkQ7QUFBQSxJQUNGO0FBRUEsUUFBSTBCLEtBQUtFLE9BQU8xRSxxQkFBcUJrRixjQUFjO0FBQ2pEcEMsZUFBUyxrQkFBa0I7QUFDM0I7QUFBQSxJQUNGO0FBRUFyQixlQUFXK0MsSUFBSTtBQUNmckMsa0JBQWNaLE1BQVM7QUFDdkJjLG1CQUFlZCxNQUFTO0FBQ3hCZ0IsY0FBVWhCLE1BQVM7QUFDbkJrQixnQkFBWWxCLE1BQVM7QUFDckJtQixjQUFVLE1BQU07QUFDaEJFLHFCQUFpQixVQUFVO0FBQUEsRUFDN0I7QUFFQSxRQUFNdUMsZ0JBQWdCQSxNQUFNO0FBQzFCckMsYUFBU3ZCLE1BQVM7QUFFbEIsUUFBSTtBQUNGLFlBQU02RCxXQUFXL0QsWUFBWXlDLFNBQVN1QixRQUFRO0FBRTlDLFVBQUksQ0FBQ0QsVUFBVTtBQUNiLGNBQU0sSUFBSUUsTUFBTSxZQUFZO0FBQUEsTUFDOUI7QUFFQW5ELG9CQUFjaUQsU0FBU0csS0FBSztBQUM1QmxELHFCQUFlK0MsU0FBU3BELE1BQU07QUFDOUJDLGdCQUFVbUQsU0FBU3BELE1BQU07QUFDekJPLGdCQUFVaEIsTUFBUztBQUNuQmtCLGtCQUFZbEIsTUFBUztBQUNyQm1CLGdCQUFVLFVBQVU7QUFDcEJFLHVCQUFpQixvQkFBb0I7QUFBQSxJQUN2QyxTQUFTNEMsY0FBYztBQUNyQjFDLGVBQVMwQyx3QkFBd0JGLFFBQVFFLGFBQWFDLFVBQVUsV0FBVztBQUFBLElBQzdFO0FBQUEsRUFDRjtBQUVBLFFBQU1DLGlCQUFpQixZQUFZO0FBQ2pDLFFBQUksQ0FBQ2hFLGVBQWUsQ0FBQ1EsY0FBYyxDQUFDRSxlQUFlLENBQUNzQixvQkFBb0IsQ0FBQ1EsYUFBYTtBQUNwRjtBQUFBLElBQ0Y7QUFFQTVDLGFBQVN3QyxTQUFTQyxNQUFNO0FBQ3hCLFVBQU00QixhQUFhLElBQUlDLGdCQUFnQjtBQUN2Q3RFLGFBQVN3QyxVQUFVNkI7QUFDbkI3QyxhQUFTdkIsTUFBUztBQUNsQmdCLGNBQVVoQixNQUFTO0FBQ25Ca0IsZ0JBQVlsQixNQUFTO0FBQ3JCbUIsY0FBVSxXQUFXO0FBQ3JCRSxxQkFBaUIsdUJBQXVCO0FBRXhDLFFBQUk7QUFDRixZQUFNaUQsWUFBWSxNQUFNNUY7QUFBQUEsUUFDdEI7QUFBQSxVQUNFNkYsV0FBV0MsT0FBT0MsV0FBVztBQUFBLFVBQzdCQyxjQUFjdkUsWUFBWW1EO0FBQUFBLFVBQzFCcUIsYUFBYWhFO0FBQUFBLFVBQ2JpRSxtQkFBbUIvRDtBQUFBQSxVQUNuQmdFLGlCQUFpQjtBQUFBLFVBQ2pCQyxhQUFhM0MsaUJBQWlCSDtBQUFBQSxVQUM5QitDLG1CQUFtQnJGLE1BQU1tRDtBQUFBQSxRQUMzQjtBQUFBLFFBQ0E7QUFBQSxVQUNFbUMsU0FBU0EsQ0FBQ0MsV0FBV2YsU0FBU2dCLGlCQUFpQjtBQUM3Qy9ELHNCQUFVOEQsU0FBUztBQUNuQjVELDZCQUFpQjZDLE9BQU87QUFFeEIsZ0JBQUlnQixjQUFjO0FBQ2hCaEUsMEJBQVlnRSxZQUFZO0FBQUEsWUFDMUI7QUFBQSxVQUNGO0FBQUEsUUFDRjtBQUFBLFFBQ0FkLFdBQVdlO0FBQUFBLE1BQ2I7QUFFQW5FLGdCQUFVc0QsU0FBUztBQUNuQnBELGtCQUFZb0QsU0FBUztBQUNyQm5ELGdCQUFVLFNBQVM7QUFDbkJFLHVCQUFpQixZQUFZO0FBQUEsSUFDL0IsU0FBUytELGlCQUFpQjtBQUN4QixVQUFJaEIsV0FBV2UsT0FBT0UsU0FBUztBQUM3QjtBQUFBLE1BQ0Y7QUFFQWxFLGdCQUFVLFFBQVE7QUFDbEJFLHVCQUFpQixXQUFXO0FBQzVCRTtBQUFBQSxRQUNFNkQsMkJBQTJCekcsNkJBQTZCeUcsMkJBQTJCckIsUUFDL0VxQixnQkFBZ0JsQixVQUNoQjtBQUFBLE1BQ047QUFBQSxJQUNGLFVBQUM7QUFDQyxVQUFJbkUsU0FBU3dDLFlBQVk2QixZQUFZO0FBQ25DckUsaUJBQVN3QyxVQUFVdkM7QUFBQUEsTUFDckI7QUFBQSxJQUNGO0FBQUEsRUFDRjtBQUVBLFFBQU1zRixpQkFBaUJBLE1BQU07QUFDM0IsUUFBSSxDQUFDdkUsUUFBUWlELE9BQU87QUFDbEI7QUFBQSxJQUNGO0FBRUEsVUFBTXVCLFNBQVNDLFNBQVNDLGNBQWMsR0FBRztBQUN6Q0YsV0FBT0csT0FBTzNFLE9BQU9pRDtBQUNyQnVCLFdBQU9JLFdBQVcsaUJBQWlCQyxLQUFLQyxJQUFJLENBQUM7QUFDN0NOLFdBQU9PLE1BQU07QUFDYlAsV0FBT1EsTUFBTTtBQUFBLEVBQ2Y7QUFFQSxTQUNFLHVCQUFDLGFBQVEsV0FBVSxzQkFBcUIsY0FBVywwQkFDakQ7QUFBQSwyQkFBQyxZQUFPLFdBQVUseUJBQ2hCO0FBQUEsNkJBQUMsU0FBSSxXQUFVLDhCQUNiO0FBQUEsK0JBQUMsU0FBTSxNQUFNLE1BQWI7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFnQjtBQUFBLFFBQ2hCLHVCQUFDLFNBQ0M7QUFBQSxpQ0FBQyxZQUFPLGtDQUFSO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQTBCO0FBQUEsVUFDMUIsdUJBQUMsVUFBSyxvQ0FBTjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUEwQjtBQUFBLGFBRjVCO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFHQTtBQUFBLFdBTEY7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQU1BO0FBQUEsTUFFQSx1QkFBQyxTQUFJLFdBQVUsd0JBQ2I7QUFBQSwrQkFBQyxVQUFLLG9CQUFOO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBVTtBQUFBLFFBQ1YsdUJBQUMsWUFBTyx1QkFBUjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQWU7QUFBQSxRQUNmLHVCQUFDLFNBQUQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFFO0FBQUEsUUFDRix1QkFBQyxVQUFLLG9CQUFOO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBVTtBQUFBLFFBQ1Y7QUFBQSxVQUFDO0FBQUE7QUFBQSxZQUNDLGNBQVc7QUFBQSxZQUNYLFVBQVV0RCxRQUFRakIsWUFBWXdFLFdBQVc7QUFBQSxZQUN6QyxVQUFVLENBQUNDLFVBQVV2RyxNQUFNNEMsY0FBYzJELE1BQU1DLE9BQU9DLEtBQUs7QUFBQSxZQUMzRCxPQUFPaEUsa0JBQWtCSixNQUFNO0FBQUEsWUFFOUJQLHNCQUFZNEU7QUFBQUEsY0FBSSxDQUFDekUsVUFDaEIsdUJBQUMsWUFBc0IsT0FBT0EsTUFBTUksSUFDakNKLGdCQUFNMEUsZUFESTFFLE1BQU1JLElBQW5CO0FBQUE7QUFBQTtBQUFBO0FBQUEscUJBRUE7QUFBQSxZQUNEO0FBQUE7QUFBQSxVQVZIO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxRQVdBO0FBQUEsV0FoQkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQWlCQTtBQUFBLE1BRUE7QUFBQSxRQUFDO0FBQUE7QUFBQSxVQUNDLFdBQVcscUJBQXFCckMsTUFBTW1ELGtCQUFrQkMsU0FBUyxjQUFjLEVBQUU7QUFBQSxVQUNqRixPQUFPcEQsTUFBTW1ELGtCQUFrQkMsU0FBUyxnQkFBZ0I7QUFBQSxVQUV4RDtBQUFBLG1DQUFDLFlBQUQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBSztBQUFBLFlBQ0pwRCxNQUFNbUQsa0JBQWtCQyxTQUFTLGNBQWM7QUFBQTtBQUFBO0FBQUEsUUFMbEQ7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLE1BTUE7QUFBQSxTQWxDRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBbUNBO0FBQUEsSUFFQSx1QkFBQyxTQUFJLFdBQVUsMEJBQXlCLGNBQVcsUUFDakQ7QUFBQTtBQUFBLFFBQUM7QUFBQTtBQUFBLFVBQ0MsUUFBUXZDLFdBQVc7QUFBQSxVQUNuQixVQUFVcUMsUUFBUWpDLFVBQVU7QUFBQSxVQUM1QixPQUFNO0FBQUEsVUFDTixPQUFNO0FBQUE7QUFBQSxRQUpSO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxNQUlnQjtBQUFBLE1BRWhCO0FBQUEsUUFBQztBQUFBO0FBQUEsVUFDQyxRQUFRSixXQUFXO0FBQUEsVUFDbkIsVUFBVUEsV0FBVyxlQUFlQSxXQUFXO0FBQUEsVUFDL0MsT0FBTTtBQUFBLFVBQ04sT0FBTTtBQUFBO0FBQUEsUUFKUjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsTUFJaUI7QUFBQSxNQUVqQjtBQUFBLFFBQUM7QUFBQTtBQUFBLFVBQ0MsUUFBUUEsV0FBVztBQUFBLFVBQ25CLFVBQVVBLFdBQVc7QUFBQSxVQUNyQixPQUFNO0FBQUEsVUFDTixPQUFNO0FBQUE7QUFBQSxRQUpSO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxNQUlpQjtBQUFBLE1BRWpCLHVCQUFDLFNBQUksV0FBVywrQkFBK0JBLE1BQU0sSUFDbERrQztBQUFBQSxnQkFBUSx1QkFBQyxnQkFBYSxXQUFVLFFBQU8sTUFBTSxNQUFyQztBQUFBO0FBQUE7QUFBQTtBQUFBLGVBQXdDO0FBQUEsUUFDaERsQyxXQUFXLGFBQWEsdUJBQUMsU0FBTSxNQUFNLE1BQWI7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQUFnQjtBQUFBLFFBQ3pDLHVCQUFDLFVBQU1hLDJCQUFQO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBcUI7QUFBQSxXQUh2QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBSUE7QUFBQSxTQXZCRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBd0JBO0FBQUEsSUFFQ0UsU0FDQyx1QkFBQyxTQUFJLFdBQVUsa0JBQWlCLE1BQUssU0FDbkM7QUFBQSw2QkFBQyxpQkFBYyxNQUFNLE1BQXJCO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUFBd0I7QUFBQSxNQUN4Qix1QkFBQyxVQUFNQSxtQkFBUDtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBQWE7QUFBQSxTQUZmO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FHQTtBQUFBLElBR0YsdUJBQUMsU0FBSSxXQUFVLHNCQUNiO0FBQUEsNkJBQUMsYUFBUSxXQUFVLDJCQUNqQjtBQUFBLCtCQUFDLFlBQU8sV0FBVSx5QkFDaEI7QUFBQSxpQ0FBQyxTQUNDO0FBQUEsbUNBQUMsVUFBSywwQkFBTjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFnQjtBQUFBLFlBQ2hCLHVCQUFDLFlBQVFyQixtQkFBU29ELFFBQVEsZ0JBQTFCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXVDO0FBQUEsZUFGekM7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0EsdUJBQUMsU0FBSSxXQUFVLHlCQUNiO0FBQUE7QUFBQSxjQUFDO0FBQUE7QUFBQSxnQkFDQyxRQUFPO0FBQUEsZ0JBQ1AsV0FBVTtBQUFBLGdCQUNWLFVBQVUsQ0FBQzRDLFVBQVV4QyxjQUFjd0MsTUFBTUMsT0FBT0ksUUFBUSxDQUFDLENBQUM7QUFBQSxnQkFDMUQsS0FBSzFHO0FBQUFBLGdCQUNMLE1BQUs7QUFBQTtBQUFBLGNBTFA7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLFlBS2E7QUFBQSxZQUViO0FBQUEsY0FBQztBQUFBO0FBQUEsZ0JBQ0MsUUFBTztBQUFBLGdCQUNQLFdBQVU7QUFBQSxnQkFDVixVQUFVLENBQUNxRyxVQUFVLEtBQUtqRCxrQkFBa0JpRCxNQUFNQyxPQUFPSSxRQUFRLENBQUMsQ0FBQztBQUFBLGdCQUNuRSxLQUFLekc7QUFBQUEsZ0JBQ0wsTUFBSztBQUFBO0FBQUEsY0FMUDtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsWUFLYTtBQUFBLFlBRWI7QUFBQSxjQUFDO0FBQUE7QUFBQSxnQkFDQyxXQUFVO0FBQUEsZ0JBQ1YsVUFBVTRDO0FBQUFBLGdCQUNWLFNBQVMsTUFBTTdDLFlBQVkyQyxTQUFTd0QsTUFBTTtBQUFBLGdCQUMxQyxPQUFNO0FBQUEsZ0JBQ04sTUFBSztBQUFBLGdCQUVMO0FBQUEseUNBQUMsY0FBVyxNQUFNLE1BQWxCO0FBQUE7QUFBQTtBQUFBO0FBQUEseUJBQXFCO0FBQUEsa0JBQ3JCLHVCQUFDLFVBQUssbUJBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSx5QkFBUztBQUFBO0FBQUE7QUFBQSxjQVJYO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxZQVNBO0FBQUEsWUFDQTtBQUFBLGNBQUM7QUFBQTtBQUFBLGdCQUNDLFdBQVcsdUJBQXVCNUYsY0FBYyxjQUFjLEVBQUU7QUFBQSxnQkFDaEUsVUFBVXNDO0FBQUFBLGdCQUNWLFNBQVMsTUFBTTVDLGVBQWUwQyxTQUFTd0QsTUFBTTtBQUFBLGdCQUM3QyxPQUFNO0FBQUEsZ0JBQ04sTUFBSztBQUFBLGdCQUVMO0FBQUEseUNBQUMsYUFBVSxNQUFNLE1BQWpCO0FBQUE7QUFBQTtBQUFBO0FBQUEseUJBQW9CO0FBQUEsa0JBQ3BCLHVCQUFDLFVBQUssa0JBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSx5QkFBUTtBQUFBO0FBQUE7QUFBQSxjQVJWO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxZQVNBO0FBQUEsZUFsQ0Y7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFtQ0E7QUFBQSxhQXhDRjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBeUNBO0FBQUEsUUFFQSx1QkFBQyxTQUFJLFdBQVUsMkJBQ2I7QUFBQTtBQUFBLFlBQUM7QUFBQTtBQUFBLGNBQ0MsTUFBTTlGO0FBQUFBLGNBQ04sZ0JBQWdCUztBQUFBQSxjQUNoQixtQkFBbUIsQ0FBQzZGLGNBQWM7QUFDaENqRyw2QkFBYWlHLFNBQVM7QUFFdEIsb0JBQUlBLFVBQVVoRyxXQUFXLFNBQVM7QUFDaENjLG1DQUFpQixlQUFlO0FBQUEsZ0JBQ2xDLFdBQVdrRixVQUFVaEcsV0FBVyxVQUFVO0FBQ3hDZ0IsMkJBQVNnRixVQUFVakYsS0FBSztBQUFBLGdCQUMxQjtBQUFBLGNBQ0Y7QUFBQSxjQUNBLEtBQUt4QjtBQUFBQTtBQUFBQSxZQVpQO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxVQVltQjtBQUFBLFVBR2xCTyxVQUFVRSxXQUFXLFdBQ3BCLHVCQUFDLFNBQUksV0FBVyxnQ0FBZ0NGLFVBQVVFLE1BQU0sSUFDN0RGLG9CQUFVRSxXQUFXLFlBQ3BCLG1DQUNFO0FBQUEsbUNBQUMsZ0JBQWEsV0FBVSxRQUFPLE1BQU0sTUFBckM7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBd0M7QUFBQSxZQUN4Qyx1QkFBQyxZQUFRRjtBQUFBQSx3QkFBVUc7QUFBQUEsY0FBUztBQUFBLGlCQUE1QjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUE2QjtBQUFBLFlBQzdCLHVCQUFDLFVBQUssd0NBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBOEI7QUFBQSxlQUhoQztBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUlBLElBQ0VILFVBQVVFLFdBQVcsV0FDdkIsbUNBQ0U7QUFBQSxtQ0FBQyxpQkFBYyxNQUFNLE1BQXJCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXdCO0FBQUEsWUFDeEIsdUJBQUMsWUFBTywrQkFBUjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUF1QjtBQUFBLGVBRnpCO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBR0EsSUFFQSxtQ0FDRTtBQUFBLG1DQUFDLFVBQU8sTUFBTSxNQUFkO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQWlCO0FBQUEsWUFDakIsdUJBQUMsWUFBTyw2QkFBUjtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUFxQjtBQUFBLFlBQ3JCLHVCQUFDLFVBQUssMEJBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBZ0I7QUFBQSxlQUhsQjtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUlBLEtBakJKO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBbUJBO0FBQUEsVUFHREosZUFDQyx1QkFBQyxTQUFJLFdBQVUsd0JBQXVCLE9BQU9BLFlBQVlrRCxNQUN2RDtBQUFBLG1DQUFDLFNBQUksS0FBSSxXQUFVLEtBQUtsRCxZQUFZbUQsV0FBcEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBNEM7QUFBQSxZQUM1Qyx1QkFBQyxTQUNDO0FBQUEscUNBQUMsVUFBSyw2QkFBTjtBQUFBO0FBQUE7QUFBQTtBQUFBLHFCQUFtQjtBQUFBLGNBQ25CLHVCQUFDLFlBQVFuRCxzQkFBWWtELFFBQXJCO0FBQUE7QUFBQTtBQUFBO0FBQUEscUJBQTBCO0FBQUEsaUJBRjVCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBR0E7QUFBQSxlQUxGO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBTUE7QUFBQSxhQTlDSjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBZ0RBO0FBQUEsUUFFQSx1QkFBQyxTQUFJLFdBQVUsMkJBQ2I7QUFBQSxpQ0FBQyxjQUFXLE9BQU0sYUFBWSxLQUFLLEtBQUssS0FBSyxNQUFNLE9BQU81QyxPQUFPM0IsT0FBakU7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFBcUU7QUFBQSxVQUNyRSx1QkFBQyxjQUFXLE9BQU0sY0FBYSxLQUFLLElBQUksS0FBSyxLQUFLLE9BQU8yQixPQUFPMUIsU0FBaEU7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFBc0U7QUFBQSxVQUN0RSx1QkFBQyxTQUFJLFdBQVUsNkJBQ2I7QUFBQSxtQ0FBQyxVQUFLLHdCQUFOO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQWM7QUFBQSxZQUNkLHVCQUFDLFlBQVEwQixpQkFBT3pCLFNBQVN3SCxRQUFRLENBQUMsS0FBbEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBb0M7QUFBQSxlQUZ0QztBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUdBO0FBQUEsYUFORjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBT0E7QUFBQSxRQUVBLHVCQUFDLFlBQU8sV0FBVSw2QkFDaEI7QUFBQTtBQUFBLFlBQUM7QUFBQTtBQUFBLGNBQ0MsV0FBVTtBQUFBLGNBQ1YsVUFBVS9EO0FBQUFBLGNBQ1YsU0FBUyxNQUFNM0MsWUFBWXlDLFNBQVNrRSxZQUFZO0FBQUEsY0FDaEQsT0FBTTtBQUFBLGNBQ04sTUFBSztBQUFBLGNBRUwsaUNBQUMsYUFBVSxNQUFNLE1BQWpCO0FBQUE7QUFBQTtBQUFBO0FBQUEscUJBQW9CO0FBQUE7QUFBQSxZQVB0QjtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUEsVUFRQTtBQUFBLFVBQ0EsdUJBQUMsU0FBSSxXQUFVLHdCQUNiO0FBQUEsbUNBQUMsVUFBTXBHLG9CQUFVcUcsYUFBYSxHQUFHckcsVUFBVXFHLFdBQVdDLGVBQWUsQ0FBQyxZQUFZLGNBQWxGO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQTZGO0FBQUEsWUFDN0YsdUJBQUMsVUFBTWxHO0FBQUFBLHFCQUFPbkIsU0FBU0M7QUFBQUEsY0FBTTtBQUFBLGNBQUlrQixPQUFPbkIsU0FBU0U7QUFBQUEsaUJBQWpEO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQXdEO0FBQUEsZUFGMUQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0E7QUFBQSxZQUFDO0FBQUE7QUFBQSxjQUNDLFdBQVU7QUFBQSxjQUNWLFVBQVUsQ0FBQ2tEO0FBQUFBLGNBQ1gsU0FBU2tCO0FBQUFBLGNBQ1QsTUFBSztBQUFBLGNBRUw7QUFBQSx1Q0FBQyxVQUFPLE1BQU0sTUFBZDtBQUFBO0FBQUE7QUFBQTtBQUFBLHVCQUFpQjtBQUFBO0FBQUE7QUFBQTtBQUFBLFlBTm5CO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxVQVFBO0FBQUEsYUF0QkY7QUFBQTtBQUFBO0FBQUE7QUFBQSxlQXVCQTtBQUFBLFdBOUhGO0FBQUE7QUFBQTtBQUFBO0FBQUEsYUErSEE7QUFBQSxNQUVBLHVCQUFDLGFBQVEsV0FBVSx5QkFDakI7QUFBQTtBQUFBLFVBQUM7QUFBQTtBQUFBLFlBQ0MsT0FBTTtBQUFBLFlBQ04sV0FBVyx1QkFBQyxhQUFVLE1BQU0sTUFBakI7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBb0I7QUFBQSxZQUMvQixZQUFXO0FBQUEsWUFDWCxPQUFPakQ7QUFBQUEsWUFDUCxPQUFNO0FBQUE7QUFBQSxVQUxSO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxRQUtrQjtBQUFBLFFBR2xCO0FBQUEsVUFBQztBQUFBO0FBQUEsWUFDQyxTQUNFSSxTQUNFO0FBQUEsY0FBQztBQUFBO0FBQUEsZ0JBQ0MsV0FBVTtBQUFBLGdCQUNWLFNBQVN1RTtBQUFBQSxnQkFDVCxPQUFNO0FBQUEsZ0JBQ04sTUFBSztBQUFBLGdCQUVMLGlDQUFDLFlBQVMsTUFBTSxNQUFoQjtBQUFBO0FBQUE7QUFBQTtBQUFBLHVCQUFtQjtBQUFBO0FBQUEsY0FOckI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLFlBT0EsSUFDRXRGO0FBQUFBLFlBRU4sT0FBTTtBQUFBLFlBQ04sV0FBV3lDLE9BQU8sdUJBQUMsZ0JBQWEsV0FBVSxRQUFPLE1BQU0sTUFBckM7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBd0MsSUFBTSx1QkFBQyxZQUFTLE1BQU0sTUFBaEI7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBbUI7QUFBQSxZQUNuRixZQUFZQSxPQUFPckIsZ0JBQWdCO0FBQUEsWUFDbkMsT0FBT0wsUUFBUWlEO0FBQUFBLFlBQ2YsT0FBTTtBQUFBO0FBQUEsVUFqQlI7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBLFFBaUJpQjtBQUFBLFFBR2pCLHVCQUFDLFNBQUksV0FBVSwrQkFDYjtBQUFBLGlDQUFDLFNBQUksV0FBVSwwQkFDYjtBQUFBLG1DQUFDLFVBQUsseUJBQU47QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBZTtBQUFBLFlBQ2YsdUJBQUMsWUFBUS9DLG9CQUFVMkYsbUJBQW1CQyxzQkFBc0JoRyxlQUFlSixNQUFNLEtBQWpGO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQW1GO0FBQUEsZUFGckY7QUFBQTtBQUFBO0FBQUE7QUFBQSxpQkFHQTtBQUFBLFVBQ0E7QUFBQSxZQUFDO0FBQUE7QUFBQSxjQUNDLFdBQVU7QUFBQSxjQUNWLFVBQVUsQ0FBQ2tDO0FBQUFBLGNBQ1gsU0FBUyxNQUFNLEtBQUt3QixlQUFlO0FBQUEsY0FDbkMsTUFBSztBQUFBLGNBRUoxQjtBQUFBQSx1QkFBTyx1QkFBQyxnQkFBYSxXQUFVLFFBQU8sTUFBTSxNQUFyQztBQUFBO0FBQUE7QUFBQTtBQUFBLHVCQUF3QyxJQUFNLHVCQUFDLFlBQVMsTUFBTSxNQUFoQjtBQUFBO0FBQUE7QUFBQTtBQUFBLHVCQUFtQjtBQUFBLGdCQUN4RUEsT0FBTyxXQUFXO0FBQUE7QUFBQTtBQUFBLFlBUHJCO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQTtBQUFBO0FBQUE7QUFBQSxVQVFBO0FBQUEsYUFiRjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBY0E7QUFBQSxRQUVDeEIsWUFDQyx1QkFBQyxhQUFRLFdBQVUsNkJBQ2pCO0FBQUEsaUNBQUMsYUFBUTtBQUFBO0FBQUEsWUFBVUEsU0FBUzZGLFlBQVlkO0FBQUFBLFlBQU87QUFBQSxlQUEvQztBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUFtRDtBQUFBLFVBQ25ELHVCQUFDLE9BQUcvRSxtQkFBUzhGLG1CQUFiO0FBQUE7QUFBQTtBQUFBO0FBQUEsaUJBQTZCO0FBQUEsVUFDNUI5RixTQUFTNkYsWUFBWWQsU0FBUyxLQUM3Qix1QkFBQyxRQUNFL0UsbUJBQVM2RixZQUFZVjtBQUFBQSxZQUFJLENBQUNZLE1BQU1DLFVBQy9CLHVCQUFDLFFBQTZCRCxrQkFBckIsR0FBR0MsS0FBSyxJQUFJRCxJQUFJLElBQXpCO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQW1DO0FBQUEsVUFDcEMsS0FISDtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUlBO0FBQUEsVUFFRGpHLFVBQ0MsdUJBQUMsU0FBSSxXQUFVLHVCQUNiO0FBQUEsbUNBQUMsVUFBSztBQUFBO0FBQUEsZUFBS0EsT0FBT21HLHNCQUFzQixLQUFNVixRQUFRLENBQUM7QUFBQSxjQUFFO0FBQUEsaUJBQXpEO0FBQUE7QUFBQTtBQUFBO0FBQUEsbUJBQTBEO0FBQUEsWUFDMUQsdUJBQUMsVUFBSztBQUFBO0FBQUEsZUFBS3pGLE9BQU9vRyxzQkFBc0IsS0FBTVgsUUFBUSxDQUFDO0FBQUEsY0FBRTtBQUFBLGlCQUF6RDtBQUFBO0FBQUE7QUFBQTtBQUFBLG1CQUEwRDtBQUFBLFlBQzFELHVCQUFDLFVBQUs7QUFBQTtBQUFBLGVBQUt6RixPQUFPcUcsa0JBQWtCLEtBQU1aLFFBQVEsQ0FBQztBQUFBLGNBQUU7QUFBQSxpQkFBckQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxtQkFBc0Q7QUFBQSxlQUh4RDtBQUFBO0FBQUE7QUFBQTtBQUFBLGlCQUlBO0FBQUEsYUFmSjtBQUFBO0FBQUE7QUFBQTtBQUFBLGVBaUJBO0FBQUEsV0EvREo7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQWlFQTtBQUFBLFNBbk1GO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FvTUE7QUFBQSxPQTNRRjtBQUFBO0FBQUE7QUFBQTtBQUFBLFNBNFFBO0FBRUo7QUFBQzdHLEdBemRlRiw0QkFBMEI7QUFBQSxLQUExQkE7QUEyZGhCLFNBQVM0SCxhQUFhM0gsT0FLbkI7QUFDRCxTQUNFLHVCQUFDLFNBQUksV0FBVyx5QkFBeUJBLE1BQU00SCxTQUFTLGVBQWUsRUFBRSxHQUFHNUgsTUFBTTZILFdBQVcsaUJBQWlCLEVBQUUsSUFDOUc7QUFBQSwyQkFBQyxVQUFNN0gsZ0JBQU02SCxXQUFXLHVCQUFDLFNBQU0sTUFBTSxNQUFiO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FBZ0IsSUFBTTdILE1BQU11SCxTQUFwRDtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQTBEO0FBQUEsSUFDMUQsdUJBQUMsWUFBUXZILGdCQUFNOEgsU0FBZjtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQXFCO0FBQUEsT0FGdkI7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQUdBO0FBRUo7QUFBQ0MsTUFaUUo7QUFjVCxTQUFTSyxXQUFXaEksT0FLakI7QUFDRCxRQUFNaUksV0FBWWpJLE1BQU15RyxRQUFRekcsTUFBTWtJLFFBQVFsSSxNQUFNbUksTUFBTW5JLE1BQU1rSSxPQUFRO0FBRXhFLFNBQ0UsdUJBQUMsU0FBSSxXQUFVLHdCQUNiO0FBQUEsMkJBQUMsU0FDQztBQUFBLDZCQUFDLFVBQU1sSSxnQkFBTThILFNBQWI7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUFtQjtBQUFBLE1BQ25CLHVCQUFDLFlBQVFNLHNCQUFZcEksTUFBTXlHLEtBQUssS0FBaEM7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUFrQztBQUFBLFNBRnBDO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FHQTtBQUFBLElBQ0EsdUJBQUMsU0FBSSxXQUFVLHVCQUNiLGlDQUFDLE9BQUUsT0FBTyxFQUFFNEIsTUFBTSxHQUFHQyxLQUFLSixJQUFJLEtBQUtJLEtBQUtILElBQUksR0FBR0YsT0FBTyxDQUFDLENBQUMsSUFBSSxLQUE1RDtBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQThELEtBRGhFO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FFQTtBQUFBLE9BUEY7QUFBQTtBQUFBO0FBQUE7QUFBQSxTQVFBO0FBRUo7QUFBQ00sTUFuQlFQO0FBcUJULFNBQVNRLFlBQVl4SSxPQU9sQjtBQUNELFNBQ0UsdUJBQUMsYUFBUSxXQUFVLHlCQUNqQjtBQUFBLDJCQUFDLFlBQ0M7QUFBQSw2QkFBQyxTQUNDO0FBQUEsK0JBQUMsVUFBTUEsZ0JBQU15SSxTQUFiO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBbUI7QUFBQSxRQUNuQix1QkFBQyxZQUFRekksZ0JBQU0wSSxTQUFmO0FBQUE7QUFBQTtBQUFBO0FBQUEsZUFBcUI7QUFBQSxXQUZ2QjtBQUFBO0FBQUE7QUFBQTtBQUFBLGFBR0E7QUFBQSxNQUNDMUksTUFBTTJJO0FBQUFBLFNBTFQ7QUFBQTtBQUFBO0FBQUE7QUFBQSxXQU1BO0FBQUEsSUFDQSx1QkFBQyxTQUFJLFdBQVUsd0JBQ1ozSSxnQkFBTXNFLFFBQ0wsdUJBQUMsU0FBSSxLQUFLdEUsTUFBTTBJLE9BQU8sS0FBSzFJLE1BQU1zRSxTQUFsQztBQUFBO0FBQUE7QUFBQTtBQUFBLFdBQXdDLElBRXhDLHVCQUFDLFNBQUksV0FBVSx5QkFDWnRFO0FBQUFBLFlBQU00STtBQUFBQSxNQUNQLHVCQUFDLFVBQU01SSxnQkFBTTZJLGNBQWI7QUFBQTtBQUFBO0FBQUE7QUFBQSxhQUF3QjtBQUFBLFNBRjFCO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FHQSxLQVBKO0FBQUE7QUFBQTtBQUFBO0FBQUEsV0FTQTtBQUFBLE9BakJGO0FBQUE7QUFBQTtBQUFBO0FBQUEsU0FrQkE7QUFFSjtBQUFDQyxNQTdCUU47QUErQlQsU0FBU0osWUFBWTNCLE9BQWU7QUFDbEMsUUFBTXNDLGFBQWFULEtBQUtVLElBQUl2QyxLQUFLLElBQUksT0FBUSxJQUFJQTtBQUNqRCxTQUFPLEdBQUdzQyxjQUFjLElBQUksTUFBTSxFQUFFLEdBQUdBLFdBQVdqQyxRQUFRLENBQUMsQ0FBQztBQUM5RDtBQUVBLFNBQVNLLHNCQUFzQnBHLFFBQWtDO0FBQy9ELFFBQU1rSSxhQUNKWCxLQUFLVSxJQUFJakksT0FBTzNCLEdBQUcsSUFBSSxLQUNuQixPQUNBa0osS0FBS1UsSUFBSWpJLE9BQU8zQixHQUFHLElBQUksTUFDckIsT0FDQTJCLE9BQU8zQixNQUFNLElBQ1gsTUFBTWtKLEtBQUtVLElBQUlqSSxPQUFPM0IsR0FBRyxFQUFFMEgsUUFBUSxDQUFDLENBQUMsTUFDckMsTUFBTXdCLEtBQUtVLElBQUlqSSxPQUFPM0IsR0FBRyxFQUFFMEgsUUFBUSxDQUFDLENBQUM7QUFDL0MsUUFBTW9DLFdBQ0paLEtBQUtVLElBQUlqSSxPQUFPMUIsS0FBSyxJQUFJLElBQ3JCLE9BQ0EwQixPQUFPMUIsUUFBUSxJQUNiLE1BQU0wQixPQUFPMUIsTUFBTXlILFFBQVEsQ0FBQyxDQUFDLE1BQzdCLE1BQU13QixLQUFLVSxJQUFJakksT0FBTzFCLEtBQUssRUFBRXlILFFBQVEsQ0FBQyxDQUFDO0FBRS9DLFNBQU8sR0FBR21DLFVBQVUsTUFBTUMsUUFBUTtBQUNwQztBQUVBLFNBQVNyRixjQUFjTixNQUFZO0FBQ2pDLFNBQU8sSUFBSTRGLFFBQWdCLENBQUNDLFNBQVNDLFdBQVc7QUFDOUMsVUFBTUMsU0FBUyxJQUFJQyxXQUFXO0FBQzlCRCxXQUFPRSxTQUFTLE1BQU07QUFDcEIsVUFBSSxPQUFPRixPQUFPakksV0FBVyxVQUFVO0FBQ3JDK0gsZ0JBQVFFLE9BQU9qSSxNQUFNO0FBQUEsTUFDdkIsT0FBTztBQUNMZ0ksZUFBTyxJQUFJaEYsTUFBTSxXQUFXLENBQUM7QUFBQSxNQUMvQjtBQUFBLElBQ0Y7QUFDQWlGLFdBQU9HLFVBQVUsTUFBTUosT0FBT0MsT0FBTzFILFNBQVMsSUFBSXlDLE1BQU0sU0FBUyxDQUFDO0FBQ2xFaUYsV0FBT0ksY0FBY25HLElBQUk7QUFBQSxFQUMzQixDQUFDO0FBQ0g7QUFBQyxJQUFBb0csSUFBQTVCLEtBQUFRLEtBQUFPO0FBQUEsYUFBQWEsSUFBQTtBQUFBLGFBQUE1QixLQUFBO0FBQUEsYUFBQVEsS0FBQTtBQUFBLGFBQUFPLEtBQUEiLCJuYW1lcyI6WyJBbGVydFRyaWFuZ2xlIiwiQ2FtZXJhIiwiQ2hlY2siLCJEb3dubG9hZCIsIkZpbGVJbWFnZSIsIkZvbGRlck9wZW4iLCJJbWFnZSIsIkltYWdlSWNvbiIsIkxvYWRlckNpcmNsZSIsIk9yYml0IiwiUm90YXRlQ2N3IiwiU3BhcmtsZXMiLCJVcGxvYWQiLCJ1c2VFZmZlY3QiLCJ1c2VNZW1vIiwidXNlUmVmIiwidXNlU3RhdGUiLCJWRUNUT1IzRF9WSUVXX0xJTUlUUyIsImdlbmVyYXRlVmVjdG9yM0RWaWV3IiwiVmVjdG9yM0RWaWV3cG9pbnRBcGlFcnJvciIsIkdhdXNzaWFuU3BsYXRWaWV3cG9ydCIsIkRFRkFVTFRfQ0FNRVJBIiwieWF3IiwicGl0Y2giLCJkaXN0YW5jZSIsInBvc2l0aW9uIiwieCIsInkiLCJ6Iiwicm90YXRpb24iLCJ2aWV3cG9ydCIsIndpZHRoIiwiaGVpZ2h0IiwiVmVjdG9yM0RWaWV3cG9pbnRXb3JrYmVuY2giLCJwcm9wcyIsIl9zIiwicGx5SW5wdXRSZWYiLCJzb3VyY2VJbnB1dFJlZiIsInZpZXdwb3J0UmVmIiwiYWJvcnRSZWYiLCJ1bmRlZmluZWQiLCJwbHlGaWxlIiwic2V0UGx5RmlsZSIsInNvdXJjZUltYWdlIiwic2V0U291cmNlSW1hZ2UiLCJsb2FkU3RhdGUiLCJzZXRMb2FkU3RhdGUiLCJzdGF0dXMiLCJwcm9ncmVzcyIsImNhbWVyYSIsInNldENhbWVyYSIsImRyYWZ0SW1hZ2UiLCJzZXREcmFmdEltYWdlIiwiZHJhZnRDYW1lcmEiLCJzZXREcmFmdENhbWVyYSIsInJlc3VsdCIsInNldFJlc3VsdCIsImFuYWx5c2lzIiwic2V0QW5hbHlzaXMiLCJzZXRTdGF0dXMiLCJzdGF0dXNNZXNzYWdlIiwic2V0U3RhdHVzTWVzc2FnZSIsImVycm9yIiwic2V0RXJyb3IiLCJpbWFnZU1vZGVscyIsIm1vZGVscyIsImZpbHRlciIsIm1vZGVsIiwiZW5hYmxlZCIsImVkaXRDYXBhYmlsaXRpZXMiLCJzdXBwb3J0c1dob2xlSW1hZ2VFZGl0IiwiaWQiLCJhcGlNb2RlbE5hbWUiLCJ0b0xvd2VyQ2FzZSIsImluY2x1ZGVzIiwiYWN0aXZlSW1hZ2VNb2RlbCIsImZpbmQiLCJzZWxlY3RlZE1vZGVsIiwib25TZWxlY3RNb2RlbCIsImN1cnJlbnQiLCJhYm9ydCIsImJ1c3kiLCJjYW5DYXB0dXJlIiwiY2FuR2VuZXJhdGUiLCJCb29sZWFuIiwiZW5kcG9pbnRPdmVycmlkZSIsImFwaUtleSIsInRyaW0iLCJoYW5kbGVTb3VyY2VJbWFnZSIsImZpbGUiLCJ0eXBlIiwic2l6ZSIsInNvdXJjZUltYWdlQnl0ZXMiLCJuYW1lIiwiZGF0YVVSTCIsImZpbGVUb0RhdGFVUkwiLCJzaXplQnl0ZXMiLCJoYW5kbGVQTFlGaWxlIiwiZW5kc1dpdGgiLCJwbHlGaWxlQnl0ZXMiLCJoYW5kbGVDYXB0dXJlIiwic25hcHNob3QiLCJjYXB0dXJlIiwiRXJyb3IiLCJpbWFnZSIsImNhcHR1cmVFcnJvciIsIm1lc3NhZ2UiLCJoYW5kbGVHZW5lcmF0ZSIsImNvbnRyb2xsZXIiLCJBYm9ydENvbnRyb2xsZXIiLCJnZW5lcmF0ZWQiLCJyZXF1ZXN0SWQiLCJjcnlwdG8iLCJyYW5kb21VVUlEIiwic291cmNlX2ltYWdlIiwiZHJhZnRfaW1hZ2UiLCJjYW1lcmFfcGFyYW1ldGVycyIsInJlYXNvbmluZ19tb2RlbCIsImltYWdlX21vZGVsIiwiZW5kcG9pbnRfb3ZlcnJpZGUiLCJvblN0YWdlIiwibmV4dFN0YWdlIiwibmV4dEFuYWx5c2lzIiwic2lnbmFsIiwiZ2VuZXJhdGlvbkVycm9yIiwiYWJvcnRlZCIsImhhbmRsZURvd25sb2FkIiwiYW5jaG9yIiwiZG9jdW1lbnQiLCJjcmVhdGVFbGVtZW50IiwiaHJlZiIsImRvd25sb2FkIiwiRGF0ZSIsIm5vdyIsInJlbCIsImNsaWNrIiwibGVuZ3RoIiwiZXZlbnQiLCJ0YXJnZXQiLCJ2YWx1ZSIsIm1hcCIsImRpc3BsYXlOYW1lIiwiZmlsZXMiLCJuZXh0U3RhdGUiLCJ0b0ZpeGVkIiwicmVzZXRDYW1lcmEiLCJwb2ludENvdW50IiwidG9Mb2NhbGVTdHJpbmciLCJ2aWV3RGVzY3JpcHRpb24iLCJmb3JtYXRWaWV3RGVzY3JpcHRpb24iLCJyZXBhaXJOb3RlcyIsIm9wdGltaXplZFByb21wdCIsIm5vdGUiLCJpbmRleCIsInJlYXNvbmluZ0R1cmF0aW9uTXMiLCJyZW5kZXJpbmdEdXJhdGlvbk1zIiwidG90YWxEdXJhdGlvbk1zIiwiUHJvZ3Jlc3NTdGVwIiwiYWN0aXZlIiwiY29tcGxldGUiLCJsYWJlbCIsIl9jMiIsIkNhbWVyYUF4aXMiLCJwZXJjZW50IiwibWluIiwibWF4IiwiZm9ybWF0QW5nbGUiLCJsZWZ0IiwiTWF0aCIsIl9jMyIsIk91dHB1dFBhbmVsIiwiYmFkZ2UiLCJ0aXRsZSIsImFjdGlvbnMiLCJlbXB0eUljb24iLCJlbXB0eUxhYmVsIiwiX2M0Iiwibm9ybWFsaXplZCIsImFicyIsImhvcml6b250YWwiLCJ2ZXJ0aWNhbCIsIlByb21pc2UiLCJyZXNvbHZlIiwicmVqZWN0IiwicmVhZGVyIiwiRmlsZVJlYWRlciIsIm9ubG9hZCIsIm9uZXJyb3IiLCJyZWFkQXNEYXRhVVJMIiwiX2MiXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiVmVjdG9yM0RWaWV3cG9pbnRXb3JrYmVuY2gudHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7XG4gIEFsZXJ0VHJpYW5nbGUsXG4gIENhbWVyYSxcbiAgQ2hlY2ssXG4gIERvd25sb2FkLFxuICBGaWxlSW1hZ2UsXG4gIEZvbGRlck9wZW4sXG4gIEltYWdlIGFzIEltYWdlSWNvbixcbiAgTG9hZGVyQ2lyY2xlLFxuICBPcmJpdCxcbiAgUm90YXRlQ2N3LFxuICBTcGFya2xlcyxcbiAgVXBsb2FkXG59IGZyb20gXCJsdWNpZGUtcmVhY3RcIjtcbmltcG9ydCB7IHVzZUVmZmVjdCwgdXNlTWVtbywgdXNlUmVmLCB1c2VTdGF0ZSwgdHlwZSBSZWFjdE5vZGUgfSBmcm9tIFwicmVhY3RcIjtcbmltcG9ydCB0eXBlIHtcbiAgRW5kcG9pbnRPdmVycmlkZSxcbiAgR2VuZXJhdGVWZWN0b3IzRFZpZXdSZXN1bHQsXG4gIE1vZGVsQ29uZmlnLFxuICBWZWN0b3IzRENhbWVyYVBhcmFtZXRlcnMsXG4gIFZlY3RvcjNER2VuZXJhdGlvblN0YWdlLFxuICBWZWN0b3IzRFJlcGFpckFuYWx5c2lzXG59IGZyb20gXCIuLi8uLi9kb21haW5cIjtcbmltcG9ydCB7IFZFQ1RPUjNEX1ZJRVdfTElNSVRTIH0gZnJvbSBcIi4uLy4uL2RvbWFpblwiO1xuaW1wb3J0IHtcbiAgZ2VuZXJhdGVWZWN0b3IzRFZpZXcsXG4gIFZlY3RvcjNEVmlld3BvaW50QXBpRXJyb3Jcbn0gZnJvbSBcIi4uLy4uL3NlcnZpY2VzL3ZlY3RvcjNkLXZpZXdwb2ludC1zZXJ2aWNlXCI7XG5pbXBvcnQge1xuICBHYXVzc2lhblNwbGF0Vmlld3BvcnQsXG4gIHR5cGUgR2F1c3NpYW5TcGxhdExvYWRTdGF0ZSxcbiAgdHlwZSBHYXVzc2lhblNwbGF0Vmlld3BvcnRIYW5kbGVcbn0gZnJvbSBcIi4vR2F1c3NpYW5TcGxhdFZpZXdwb3J0XCI7XG5cbnR5cGUgVmVjdG9yM0RWaWV3cG9pbnRXb3JrYmVuY2hQcm9wcyA9IHtcbiAgZW5kcG9pbnRPdmVycmlkZT86IEVuZHBvaW50T3ZlcnJpZGU7XG4gIG1vZGVsczogTW9kZWxDb25maWdbXTtcbiAgb25TZWxlY3RNb2RlbDogKG1vZGVsSWQ6IHN0cmluZykgPT4gdm9pZDtcbiAgc2VsZWN0ZWRNb2RlbD86IE1vZGVsQ29uZmlnO1xufTtcblxudHlwZSBTb3VyY2VJbWFnZVN0YXRlID0ge1xuICBuYW1lOiBzdHJpbmc7XG4gIGRhdGFVUkw6IHN0cmluZztcbiAgc2l6ZUJ5dGVzOiBudW1iZXI7XG59O1xuXG50eXBlIFdvcmtiZW5jaFN0YXR1cyA9XG4gIHwgXCJpZGxlXCJcbiAgfCBcImNhcHR1cmVkXCJcbiAgfCBWZWN0b3IzREdlbmVyYXRpb25TdGFnZVxuICB8IFwic3VjY2Vzc1wiXG4gIHwgXCJmYWlsZWRcIjtcblxuY29uc3QgREVGQVVMVF9DQU1FUkE6IFZlY3RvcjNEQ2FtZXJhUGFyYW1ldGVycyA9IHtcbiAgeWF3OiAwLFxuICBwaXRjaDogMCxcbiAgZGlzdGFuY2U6IDUsXG4gIHBvc2l0aW9uOiB7IHg6IDAsIHk6IDAsIHo6IC01IH0sXG4gIHJvdGF0aW9uOiB7IHg6IDAsIHk6IDAsIHo6IDAgfSxcbiAgdmlld3BvcnQ6IHsgd2lkdGg6IDEsIGhlaWdodDogMSB9XG59O1xuXG5leHBvcnQgZnVuY3Rpb24gVmVjdG9yM0RWaWV3cG9pbnRXb3JrYmVuY2gocHJvcHM6IFZlY3RvcjNEVmlld3BvaW50V29ya2JlbmNoUHJvcHMpIHtcbiAgY29uc3QgcGx5SW5wdXRSZWYgPSB1c2VSZWY8SFRNTElucHV0RWxlbWVudCB8IG51bGw+KG51bGwpO1xuICBjb25zdCBzb3VyY2VJbnB1dFJlZiA9IHVzZVJlZjxIVE1MSW5wdXRFbGVtZW50IHwgbnVsbD4obnVsbCk7XG4gIGNvbnN0IHZpZXdwb3J0UmVmID0gdXNlUmVmPEdhdXNzaWFuU3BsYXRWaWV3cG9ydEhhbmRsZSB8IG51bGw+KG51bGwpO1xuICBjb25zdCBhYm9ydFJlZiA9IHVzZVJlZjxBYm9ydENvbnRyb2xsZXIgfCB1bmRlZmluZWQ+KHVuZGVmaW5lZCk7XG4gIGNvbnN0IFtwbHlGaWxlLCBzZXRQbHlGaWxlXSA9IHVzZVN0YXRlPEZpbGU+KCk7XG4gIGNvbnN0IFtzb3VyY2VJbWFnZSwgc2V0U291cmNlSW1hZ2VdID0gdXNlU3RhdGU8U291cmNlSW1hZ2VTdGF0ZT4oKTtcbiAgY29uc3QgW2xvYWRTdGF0ZSwgc2V0TG9hZFN0YXRlXSA9IHVzZVN0YXRlPEdhdXNzaWFuU3BsYXRMb2FkU3RhdGU+KHtcbiAgICBzdGF0dXM6IFwiaWRsZVwiLFxuICAgIHByb2dyZXNzOiAwXG4gIH0pO1xuICBjb25zdCBbY2FtZXJhLCBzZXRDYW1lcmFdID0gdXNlU3RhdGUoREVGQVVMVF9DQU1FUkEpO1xuICBjb25zdCBbZHJhZnRJbWFnZSwgc2V0RHJhZnRJbWFnZV0gPSB1c2VTdGF0ZTxzdHJpbmc+KCk7XG4gIGNvbnN0IFtkcmFmdENhbWVyYSwgc2V0RHJhZnRDYW1lcmFdID0gdXNlU3RhdGU8VmVjdG9yM0RDYW1lcmFQYXJhbWV0ZXJzPigpO1xuICBjb25zdCBbcmVzdWx0LCBzZXRSZXN1bHRdID0gdXNlU3RhdGU8R2VuZXJhdGVWZWN0b3IzRFZpZXdSZXN1bHQ+KCk7XG4gIGNvbnN0IFthbmFseXNpcywgc2V0QW5hbHlzaXNdID0gdXNlU3RhdGU8VmVjdG9yM0RSZXBhaXJBbmFseXNpcz4oKTtcbiAgY29uc3QgW3N0YXR1cywgc2V0U3RhdHVzXSA9IHVzZVN0YXRlPFdvcmtiZW5jaFN0YXR1cz4oXCJpZGxlXCIpO1xuICBjb25zdCBbc3RhdHVzTWVzc2FnZSwgc2V0U3RhdHVzTWVzc2FnZV0gPSB1c2VTdGF0ZShcIuetieW+heaNleiOt+aWsOinhuinklwiKTtcbiAgY29uc3QgW2Vycm9yLCBzZXRFcnJvcl0gPSB1c2VTdGF0ZTxzdHJpbmc+KCk7XG5cbiAgY29uc3QgaW1hZ2VNb2RlbHMgPSB1c2VNZW1vKFxuICAgICgpID0+XG4gICAgICBwcm9wcy5tb2RlbHMuZmlsdGVyKFxuICAgICAgICAobW9kZWwpID0+XG4gICAgICAgICAgbW9kZWwuZW5hYmxlZCAmJlxuICAgICAgICAgIG1vZGVsLmVkaXRDYXBhYmlsaXRpZXMuc3VwcG9ydHNXaG9sZUltYWdlRWRpdCAmJlxuICAgICAgICAgIChtb2RlbC5pZCA9PT0gXCJncHQtaW1hZ2UtMlwiIHx8IG1vZGVsLmFwaU1vZGVsTmFtZS50b0xvd2VyQ2FzZSgpLmluY2x1ZGVzKFwiZ3B0LWltYWdlLTJcIikpXG4gICAgICApLFxuICAgIFtwcm9wcy5tb2RlbHNdXG4gICk7XG4gIGNvbnN0IGFjdGl2ZUltYWdlTW9kZWwgPSBpbWFnZU1vZGVscy5maW5kKChtb2RlbCkgPT4gbW9kZWwuaWQgPT09IHByb3BzLnNlbGVjdGVkTW9kZWw/LmlkKTtcblxuICB1c2VFZmZlY3QoKCkgPT4ge1xuICAgIGlmICghYWN0aXZlSW1hZ2VNb2RlbCAmJiBpbWFnZU1vZGVsc1swXSkge1xuICAgICAgcHJvcHMub25TZWxlY3RNb2RlbChpbWFnZU1vZGVsc1swXS5pZCk7XG4gICAgfVxuICB9LCBbYWN0aXZlSW1hZ2VNb2RlbCwgaW1hZ2VNb2RlbHMsIHByb3BzLm9uU2VsZWN0TW9kZWxdKTtcblxuICB1c2VFZmZlY3QoKCkgPT4gKCkgPT4gYWJvcnRSZWYuY3VycmVudD8uYWJvcnQoKSwgW10pO1xuXG4gIGNvbnN0IGJ1c3kgPSBzdGF0dXMgPT09IFwicmVhc29uaW5nXCIgfHwgc3RhdHVzID09PSBcInJlbmRlcmluZ1wiO1xuICBjb25zdCBjYW5DYXB0dXJlID0gbG9hZFN0YXRlLnN0YXR1cyA9PT0gXCJyZWFkeVwiICYmICFidXN5O1xuICBjb25zdCBjYW5HZW5lcmF0ZSA9IEJvb2xlYW4oXG4gICAgc291cmNlSW1hZ2UgJiZcbiAgICAgIGRyYWZ0SW1hZ2UgJiZcbiAgICAgIGRyYWZ0Q2FtZXJhICYmXG4gICAgICBhY3RpdmVJbWFnZU1vZGVsICYmXG4gICAgICBwcm9wcy5lbmRwb2ludE92ZXJyaWRlPy5hcGlLZXk/LnRyaW0oKSAmJlxuICAgICAgIWJ1c3lcbiAgKTtcblxuICBjb25zdCBoYW5kbGVTb3VyY2VJbWFnZSA9IGFzeW5jIChmaWxlPzogRmlsZSkgPT4ge1xuICAgIHNldEVycm9yKHVuZGVmaW5lZCk7XG5cbiAgICBpZiAoIWZpbGUpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICBpZiAoIVtcImltYWdlL3BuZ1wiLCBcImltYWdlL2pwZWdcIiwgXCJpbWFnZS93ZWJwXCJdLmluY2x1ZGVzKGZpbGUudHlwZSkpIHtcbiAgICAgIHNldEVycm9yKFwi5Y6f5aeL5Y+C6ICD5Zu+5LuF5pSv5oyBIFBOR+OAgUpQRUcg5oiWIFdlYlDjgIJcIik7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgaWYgKGZpbGUuc2l6ZSA+IFZFQ1RPUjNEX1ZJRVdfTElNSVRTLnNvdXJjZUltYWdlQnl0ZXMpIHtcbiAgICAgIHNldEVycm9yKFwi5Y6f5aeL5Y+C6ICD5Zu+5LiN6IO96LaF6L+HIDIwIE1C44CCXCIpO1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIHRyeSB7XG4gICAgICBzZXRTb3VyY2VJbWFnZSh7XG4gICAgICAgIG5hbWU6IGZpbGUubmFtZSxcbiAgICAgICAgZGF0YVVSTDogYXdhaXQgZmlsZVRvRGF0YVVSTChmaWxlKSxcbiAgICAgICAgc2l6ZUJ5dGVzOiBmaWxlLnNpemVcbiAgICAgIH0pO1xuICAgICAgc2V0UmVzdWx0KHVuZGVmaW5lZCk7XG4gICAgICBzZXRBbmFseXNpcyh1bmRlZmluZWQpO1xuICAgIH0gY2F0Y2gge1xuICAgICAgc2V0RXJyb3IoXCLljp/lp4vlj4LogIPlm77or7vlj5blpLHotKXjgIJcIik7XG4gICAgfVxuICB9O1xuXG4gIGNvbnN0IGhhbmRsZVBMWUZpbGUgPSAoZmlsZT86IEZpbGUpID0+IHtcbiAgICBzZXRFcnJvcih1bmRlZmluZWQpO1xuXG4gICAgaWYgKCFmaWxlKSB7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgaWYgKCFmaWxlLm5hbWUudG9Mb3dlckNhc2UoKS5lbmRzV2l0aChcIi5wbHlcIikpIHtcbiAgICAgIHNldEVycm9yKFwiM0Qg5qih5Z6L5b+F6aG75pivIC5wbHkg5qC85byP55qEIEdhdXNzaWFuIFNwbGF0dGluZyDmlofku7bjgIJcIik7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgaWYgKGZpbGUuc2l6ZSA+IFZFQ1RPUjNEX1ZJRVdfTElNSVRTLnBseUZpbGVCeXRlcykge1xuICAgICAgc2V0RXJyb3IoXCJQTFkg5paH5Lu25LiN6IO96LaF6L+HIDEgR0LjgIJcIik7XG4gICAgICByZXR1cm47XG4gICAgfVxuXG4gICAgc2V0UGx5RmlsZShmaWxlKTtcbiAgICBzZXREcmFmdEltYWdlKHVuZGVmaW5lZCk7XG4gICAgc2V0RHJhZnRDYW1lcmEodW5kZWZpbmVkKTtcbiAgICBzZXRSZXN1bHQodW5kZWZpbmVkKTtcbiAgICBzZXRBbmFseXNpcyh1bmRlZmluZWQpO1xuICAgIHNldFN0YXR1cyhcImlkbGVcIik7XG4gICAgc2V0U3RhdHVzTWVzc2FnZShcIlBMWSDmraPlnKjovb3lhaVcIik7XG4gIH07XG5cbiAgY29uc3QgaGFuZGxlQ2FwdHVyZSA9ICgpID0+IHtcbiAgICBzZXRFcnJvcih1bmRlZmluZWQpO1xuXG4gICAgdHJ5IHtcbiAgICAgIGNvbnN0IHNuYXBzaG90ID0gdmlld3BvcnRSZWYuY3VycmVudD8uY2FwdHVyZSgpO1xuXG4gICAgICBpZiAoIXNuYXBzaG90KSB7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihcIjNEIOinhuWPo+WwmuacquWwsee7quOAglwiKTtcbiAgICAgIH1cblxuICAgICAgc2V0RHJhZnRJbWFnZShzbmFwc2hvdC5pbWFnZSk7XG4gICAgICBzZXREcmFmdENhbWVyYShzbmFwc2hvdC5jYW1lcmEpO1xuICAgICAgc2V0Q2FtZXJhKHNuYXBzaG90LmNhbWVyYSk7XG4gICAgICBzZXRSZXN1bHQodW5kZWZpbmVkKTtcbiAgICAgIHNldEFuYWx5c2lzKHVuZGVmaW5lZCk7XG4gICAgICBzZXRTdGF0dXMoXCJjYXB0dXJlZFwiKTtcbiAgICAgIHNldFN0YXR1c01lc3NhZ2UoXCLlt7LmjZXojrflvZPliY3nm7jmnLrnn6npmLXkuI4gM0RHUyDojYnlm75cIik7XG4gICAgfSBjYXRjaCAoY2FwdHVyZUVycm9yKSB7XG4gICAgICBzZXRFcnJvcihjYXB0dXJlRXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGNhcHR1cmVFcnJvci5tZXNzYWdlIDogXCLlvZPliY3plZzlpLTmjZXojrflpLHotKXjgIJcIik7XG4gICAgfVxuICB9O1xuXG4gIGNvbnN0IGhhbmRsZUdlbmVyYXRlID0gYXN5bmMgKCkgPT4ge1xuICAgIGlmICghc291cmNlSW1hZ2UgfHwgIWRyYWZ0SW1hZ2UgfHwgIWRyYWZ0Q2FtZXJhIHx8ICFhY3RpdmVJbWFnZU1vZGVsIHx8ICFjYW5HZW5lcmF0ZSkge1xuICAgICAgcmV0dXJuO1xuICAgIH1cblxuICAgIGFib3J0UmVmLmN1cnJlbnQ/LmFib3J0KCk7XG4gICAgY29uc3QgY29udHJvbGxlciA9IG5ldyBBYm9ydENvbnRyb2xsZXIoKTtcbiAgICBhYm9ydFJlZi5jdXJyZW50ID0gY29udHJvbGxlcjtcbiAgICBzZXRFcnJvcih1bmRlZmluZWQpO1xuICAgIHNldFJlc3VsdCh1bmRlZmluZWQpO1xuICAgIHNldEFuYWx5c2lzKHVuZGVmaW5lZCk7XG4gICAgc2V0U3RhdHVzKFwicmVhc29uaW5nXCIpO1xuICAgIHNldFN0YXR1c01lc3NhZ2UoXCJncHQtNS41IOato+WcqOWIhuaekOS4iee7tOWHoOS9leS4juW9ouWPmOihpeWBv1wiKTtcblxuICAgIHRyeSB7XG4gICAgICBjb25zdCBnZW5lcmF0ZWQgPSBhd2FpdCBnZW5lcmF0ZVZlY3RvcjNEVmlldyhcbiAgICAgICAge1xuICAgICAgICAgIHJlcXVlc3RJZDogY3J5cHRvLnJhbmRvbVVVSUQoKSxcbiAgICAgICAgICBzb3VyY2VfaW1hZ2U6IHNvdXJjZUltYWdlLmRhdGFVUkwsXG4gICAgICAgICAgZHJhZnRfaW1hZ2U6IGRyYWZ0SW1hZ2UsXG4gICAgICAgICAgY2FtZXJhX3BhcmFtZXRlcnM6IGRyYWZ0Q2FtZXJhLFxuICAgICAgICAgIHJlYXNvbmluZ19tb2RlbDogXCJncHQtNS41XCIsXG4gICAgICAgICAgaW1hZ2VfbW9kZWw6IGFjdGl2ZUltYWdlTW9kZWwuYXBpTW9kZWxOYW1lLFxuICAgICAgICAgIGVuZHBvaW50X292ZXJyaWRlOiBwcm9wcy5lbmRwb2ludE92ZXJyaWRlXG4gICAgICAgIH0sXG4gICAgICAgIHtcbiAgICAgICAgICBvblN0YWdlOiAobmV4dFN0YWdlLCBtZXNzYWdlLCBuZXh0QW5hbHlzaXMpID0+IHtcbiAgICAgICAgICAgIHNldFN0YXR1cyhuZXh0U3RhZ2UpO1xuICAgICAgICAgICAgc2V0U3RhdHVzTWVzc2FnZShtZXNzYWdlKTtcblxuICAgICAgICAgICAgaWYgKG5leHRBbmFseXNpcykge1xuICAgICAgICAgICAgICBzZXRBbmFseXNpcyhuZXh0QW5hbHlzaXMpO1xuICAgICAgICAgICAgfVxuICAgICAgICAgIH1cbiAgICAgICAgfSxcbiAgICAgICAgY29udHJvbGxlci5zaWduYWxcbiAgICAgICk7XG5cbiAgICAgIHNldFJlc3VsdChnZW5lcmF0ZWQpO1xuICAgICAgc2V0QW5hbHlzaXMoZ2VuZXJhdGVkKTtcbiAgICAgIHNldFN0YXR1cyhcInN1Y2Nlc3NcIik7XG4gICAgICBzZXRTdGF0dXNNZXNzYWdlKFwi55S15b2x57qn5paw6KeG6KeS6YeN5aGR5a6M5oiQXCIpO1xuICAgIH0gY2F0Y2ggKGdlbmVyYXRpb25FcnJvcikge1xuICAgICAgaWYgKGNvbnRyb2xsZXIuc2lnbmFsLmFib3J0ZWQpIHtcbiAgICAgICAgcmV0dXJuO1xuICAgICAgfVxuXG4gICAgICBzZXRTdGF0dXMoXCJmYWlsZWRcIik7XG4gICAgICBzZXRTdGF0dXNNZXNzYWdlKFwi5Y+M5qih5Z6L566h57q/5omn6KGM5aSx6LSlXCIpO1xuICAgICAgc2V0RXJyb3IoXG4gICAgICAgIGdlbmVyYXRpb25FcnJvciBpbnN0YW5jZW9mIFZlY3RvcjNEVmlld3BvaW50QXBpRXJyb3IgfHwgZ2VuZXJhdGlvbkVycm9yIGluc3RhbmNlb2YgRXJyb3JcbiAgICAgICAgICA/IGdlbmVyYXRpb25FcnJvci5tZXNzYWdlXG4gICAgICAgICAgOiBcIjNEIOinhuinkumHjeWhkeWksei0peOAglwiXG4gICAgICApO1xuICAgIH0gZmluYWxseSB7XG4gICAgICBpZiAoYWJvcnRSZWYuY3VycmVudCA9PT0gY29udHJvbGxlcikge1xuICAgICAgICBhYm9ydFJlZi5jdXJyZW50ID0gdW5kZWZpbmVkO1xuICAgICAgfVxuICAgIH1cbiAgfTtcblxuICBjb25zdCBoYW5kbGVEb3dubG9hZCA9ICgpID0+IHtcbiAgICBpZiAoIXJlc3VsdD8uaW1hZ2UpIHtcbiAgICAgIHJldHVybjtcbiAgICB9XG5cbiAgICBjb25zdCBhbmNob3IgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiYVwiKTtcbiAgICBhbmNob3IuaHJlZiA9IHJlc3VsdC5pbWFnZTtcbiAgICBhbmNob3IuZG93bmxvYWQgPSBgdmVjdG9yM2Qtdmlldy0ke0RhdGUubm93KCl9LnBuZ2A7XG4gICAgYW5jaG9yLnJlbCA9IFwibm9yZWZlcnJlclwiO1xuICAgIGFuY2hvci5jbGljaygpO1xuICB9O1xuXG4gIHJldHVybiAoXG4gICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwidmVjdG9yM2Qtd29ya2JlbmNoXCIgYXJpYS1sYWJlbD1cIlZlY3RvcjNEIFZpZXdwb2ludCDlt6XkvZzlj7BcIj5cbiAgICAgIDxoZWFkZXIgY2xhc3NOYW1lPVwidmVjdG9yM2QtcGlwZWxpbmUtYmFyXCI+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidmVjdG9yM2QtcGlwZWxpbmUtaWRlbnRpdHlcIj5cbiAgICAgICAgICA8T3JiaXQgc2l6ZT17MTl9IC8+XG4gICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgIDxzdHJvbmc+VmVjdG9yM0QtVmlld3BvaW50PC9zdHJvbmc+XG4gICAgICAgICAgICA8c3Bhbj4zREdTIENBTUVSQSBQSVBFTElORTwvc3Bhbj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9kaXY+XG5cbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1tb2RlbC1yb3V0ZVwiPlxuICAgICAgICAgIDxzcGFuPuepuumXtOaOqOeQhjwvc3Bhbj5cbiAgICAgICAgICA8c3Ryb25nPmdwdC01LjU8L3N0cm9uZz5cbiAgICAgICAgICA8aSAvPlxuICAgICAgICAgIDxzcGFuPuWbvuWDj+mHjeWhkTwvc3Bhbj5cbiAgICAgICAgICA8c2VsZWN0XG4gICAgICAgICAgICBhcmlhLWxhYmVsPVwi5Zu+5YOP6YeN5aGR5qih5Z6LXCJcbiAgICAgICAgICAgIGRpc2FibGVkPXtidXN5IHx8IGltYWdlTW9kZWxzLmxlbmd0aCA9PT0gMH1cbiAgICAgICAgICAgIG9uQ2hhbmdlPXsoZXZlbnQpID0+IHByb3BzLm9uU2VsZWN0TW9kZWwoZXZlbnQudGFyZ2V0LnZhbHVlKX1cbiAgICAgICAgICAgIHZhbHVlPXthY3RpdmVJbWFnZU1vZGVsPy5pZCA/PyBcIlwifVxuICAgICAgICAgID5cbiAgICAgICAgICAgIHtpbWFnZU1vZGVscy5tYXAoKG1vZGVsKSA9PiAoXG4gICAgICAgICAgICAgIDxvcHRpb24ga2V5PXttb2RlbC5pZH0gdmFsdWU9e21vZGVsLmlkfT5cbiAgICAgICAgICAgICAgICB7bW9kZWwuZGlzcGxheU5hbWV9XG4gICAgICAgICAgICAgIDwvb3B0aW9uPlxuICAgICAgICAgICAgKSl9XG4gICAgICAgICAgPC9zZWxlY3Q+XG4gICAgICAgIDwvZGl2PlxuXG4gICAgICAgIDxkaXZcbiAgICAgICAgICBjbGFzc05hbWU9e2B2ZWN0b3IzZC1hcGktc3RhdGUke3Byb3BzLmVuZHBvaW50T3ZlcnJpZGU/LmFwaUtleSA/IFwiIGlzLXJlYWR5XCIgOiBcIlwifWB9XG4gICAgICAgICAgdGl0bGU9e3Byb3BzLmVuZHBvaW50T3ZlcnJpZGU/LmFwaUtleSA/IFwiQVBJIEtleSDlt7LphY3nva5cIiA6IFwi6K+35Zyo6K6+572u5Lit6YWN572uIEFQSSBLZXlcIn1cbiAgICAgICAgPlxuICAgICAgICAgIDxzcGFuIC8+XG4gICAgICAgICAge3Byb3BzLmVuZHBvaW50T3ZlcnJpZGU/LmFwaUtleSA/IFwiQVBJIFJFQURZXCIgOiBcIkFQSSBLRVkgTUlTU0lOR1wifVxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvaGVhZGVyPlxuXG4gICAgICA8ZGl2IGNsYXNzTmFtZT1cInZlY3RvcjNkLXByb2dyZXNzLXJhaWxcIiBhcmlhLWxhYmVsPVwi55Sf5oiQ6L+b5bqmXCI+XG4gICAgICAgIDxQcm9ncmVzc1N0ZXBcbiAgICAgICAgICBhY3RpdmU9e3N0YXR1cyA9PT0gXCJjYXB0dXJlZFwifVxuICAgICAgICAgIGNvbXBsZXRlPXtCb29sZWFuKGRyYWZ0SW1hZ2UpfVxuICAgICAgICAgIGluZGV4PVwiMDFcIlxuICAgICAgICAgIGxhYmVsPVwi5o2V6I6355u45py655+p6Zi1XCJcbiAgICAgICAgLz5cbiAgICAgICAgPFByb2dyZXNzU3RlcFxuICAgICAgICAgIGFjdGl2ZT17c3RhdHVzID09PSBcInJlYXNvbmluZ1wifVxuICAgICAgICAgIGNvbXBsZXRlPXtzdGF0dXMgPT09IFwicmVuZGVyaW5nXCIgfHwgc3RhdHVzID09PSBcInN1Y2Nlc3NcIn1cbiAgICAgICAgICBpbmRleD1cIjAyXCJcbiAgICAgICAgICBsYWJlbD1cIuepuumXtOS4juW9ouWPmOWIhuaekFwiXG4gICAgICAgIC8+XG4gICAgICAgIDxQcm9ncmVzc1N0ZXBcbiAgICAgICAgICBhY3RpdmU9e3N0YXR1cyA9PT0gXCJyZW5kZXJpbmdcIn1cbiAgICAgICAgICBjb21wbGV0ZT17c3RhdHVzID09PSBcInN1Y2Nlc3NcIn1cbiAgICAgICAgICBpbmRleD1cIjAzXCJcbiAgICAgICAgICBsYWJlbD1cIueUteW9see6p+e7huiKgumHjeWhkVwiXG4gICAgICAgIC8+XG4gICAgICAgIDxkaXYgY2xhc3NOYW1lPXtgdmVjdG9yM2QtbGl2ZS1zdGF0dXMgc3RhdHVzLSR7c3RhdHVzfWB9PlxuICAgICAgICAgIHtidXN5ICYmIDxMb2FkZXJDaXJjbGUgY2xhc3NOYW1lPVwic3BpblwiIHNpemU9ezE1fSAvPn1cbiAgICAgICAgICB7c3RhdHVzID09PSBcInN1Y2Nlc3NcIiAmJiA8Q2hlY2sgc2l6ZT17MTV9IC8+fVxuICAgICAgICAgIDxzcGFuPntzdGF0dXNNZXNzYWdlfTwvc3Bhbj5cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cblxuICAgICAge2Vycm9yICYmIChcbiAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1lcnJvclwiIHJvbGU9XCJhbGVydFwiPlxuICAgICAgICAgIDxBbGVydFRyaWFuZ2xlIHNpemU9ezE2fSAvPlxuICAgICAgICAgIDxzcGFuPntlcnJvcn08L3NwYW4+XG4gICAgICAgIDwvZGl2PlxuICAgICAgKX1cblxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1tYWluLWdyaWRcIj5cbiAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwidmVjdG9yM2Qtdmlld3BvcnQtcGFuZWxcIj5cbiAgICAgICAgICA8aGVhZGVyIGNsYXNzTmFtZT1cInZlY3RvcjNkLXBhbmVsLWhlYWRlclwiPlxuICAgICAgICAgICAgPGRpdj5cbiAgICAgICAgICAgICAgPHNwYW4+TElWRSBTQ0VORTwvc3Bhbj5cbiAgICAgICAgICAgICAgPHN0cm9uZz57cGx5RmlsZT8ubmFtZSA/PyBcIuacqui9veWFpSBQTFkg5Zy65pmvXCJ9PC9zdHJvbmc+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidmVjdG9yM2QtZmlsZS1hY3Rpb25zXCI+XG4gICAgICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgICAgIGFjY2VwdD1cIi5wbHlcIlxuICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cInZpc3VhbGx5LWhpZGRlblwiXG4gICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4gaGFuZGxlUExZRmlsZShldmVudC50YXJnZXQuZmlsZXM/LlswXSl9XG4gICAgICAgICAgICAgICAgcmVmPXtwbHlJbnB1dFJlZn1cbiAgICAgICAgICAgICAgICB0eXBlPVwiZmlsZVwiXG4gICAgICAgICAgICAgIC8+XG4gICAgICAgICAgICAgIDxpbnB1dFxuICAgICAgICAgICAgICAgIGFjY2VwdD1cImltYWdlL3BuZyxpbWFnZS9qcGVnLGltYWdlL3dlYnBcIlxuICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cInZpc3VhbGx5LWhpZGRlblwiXG4gICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4gdm9pZCBoYW5kbGVTb3VyY2VJbWFnZShldmVudC50YXJnZXQuZmlsZXM/LlswXSl9XG4gICAgICAgICAgICAgICAgcmVmPXtzb3VyY2VJbnB1dFJlZn1cbiAgICAgICAgICAgICAgICB0eXBlPVwiZmlsZVwiXG4gICAgICAgICAgICAgIC8+XG4gICAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgICBjbGFzc05hbWU9XCJ2ZWN0b3IzZC10b29sLWJ1dHRvblwiXG4gICAgICAgICAgICAgICAgZGlzYWJsZWQ9e2J1c3l9XG4gICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gcGx5SW5wdXRSZWYuY3VycmVudD8uY2xpY2soKX1cbiAgICAgICAgICAgICAgICB0aXRsZT1cIui9veWFpSAzREdTIFBMWVwiXG4gICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXG4gICAgICAgICAgICAgID5cbiAgICAgICAgICAgICAgICA8Rm9sZGVyT3BlbiBzaXplPXsxNX0gLz5cbiAgICAgICAgICAgICAgICA8c3Bhbj5QTFk8L3NwYW4+XG4gICAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgICAgICA8YnV0dG9uXG4gICAgICAgICAgICAgICAgY2xhc3NOYW1lPXtgdmVjdG9yM2QtdG9vbC1idXR0b24ke3NvdXJjZUltYWdlID8gXCIgaXMtcmVhZHlcIiA6IFwiXCJ9YH1cbiAgICAgICAgICAgICAgICBkaXNhYmxlZD17YnVzeX1cbiAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBzb3VyY2VJbnB1dFJlZi5jdXJyZW50Py5jbGljaygpfVxuICAgICAgICAgICAgICAgIHRpdGxlPVwi6L295YWl5Y6f5aeL6auY5riF5Y+C6ICD5Zu+XCJcbiAgICAgICAgICAgICAgICB0eXBlPVwiYnV0dG9uXCJcbiAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgIDxGaWxlSW1hZ2Ugc2l6ZT17MTV9IC8+XG4gICAgICAgICAgICAgICAgPHNwYW4+5Y6f5Zu+PC9zcGFuPlxuICAgICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvaGVhZGVyPlxuXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC12aWV3cG9ydC1zaGVsbFwiPlxuICAgICAgICAgICAgPEdhdXNzaWFuU3BsYXRWaWV3cG9ydFxuICAgICAgICAgICAgICBmaWxlPXtwbHlGaWxlfVxuICAgICAgICAgICAgICBvbkNhbWVyYUNoYW5nZT17c2V0Q2FtZXJhfVxuICAgICAgICAgICAgICBvbkxvYWRTdGF0ZUNoYW5nZT17KG5leHRTdGF0ZSkgPT4ge1xuICAgICAgICAgICAgICAgIHNldExvYWRTdGF0ZShuZXh0U3RhdGUpO1xuXG4gICAgICAgICAgICAgICAgaWYgKG5leHRTdGF0ZS5zdGF0dXMgPT09IFwicmVhZHlcIikge1xuICAgICAgICAgICAgICAgICAgc2V0U3RhdHVzTWVzc2FnZShcIuWcuuaZr+W3suWwsee7qu+8jOWPr+aNleiOt+W9k+WJjemVnOWktFwiKTtcbiAgICAgICAgICAgICAgICB9IGVsc2UgaWYgKG5leHRTdGF0ZS5zdGF0dXMgPT09IFwiZmFpbGVkXCIpIHtcbiAgICAgICAgICAgICAgICAgIHNldEVycm9yKG5leHRTdGF0ZS5lcnJvcik7XG4gICAgICAgICAgICAgICAgfVxuICAgICAgICAgICAgICB9fVxuICAgICAgICAgICAgICByZWY9e3ZpZXdwb3J0UmVmfVxuICAgICAgICAgICAgLz5cblxuICAgICAgICAgICAge2xvYWRTdGF0ZS5zdGF0dXMgIT09IFwicmVhZHlcIiAmJiAoXG4gICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPXtgdmVjdG9yM2Qtdmlld3BvcnQtb3ZlcmxheSBpcy0ke2xvYWRTdGF0ZS5zdGF0dXN9YH0+XG4gICAgICAgICAgICAgICAge2xvYWRTdGF0ZS5zdGF0dXMgPT09IFwibG9hZGluZ1wiID8gKFxuICAgICAgICAgICAgICAgICAgPD5cbiAgICAgICAgICAgICAgICAgICAgPExvYWRlckNpcmNsZSBjbGFzc05hbWU9XCJzcGluXCIgc2l6ZT17MjV9IC8+XG4gICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+e2xvYWRTdGF0ZS5wcm9ncmVzc30lPC9zdHJvbmc+XG4gICAgICAgICAgICAgICAgICAgIDxzcGFuPuino+aekCBHYXVzc2lhbiBTcGxhdHRpbmcg54K55LqRPC9zcGFuPlxuICAgICAgICAgICAgICAgICAgPC8+XG4gICAgICAgICAgICAgICAgKSA6IGxvYWRTdGF0ZS5zdGF0dXMgPT09IFwiZmFpbGVkXCIgPyAoXG4gICAgICAgICAgICAgICAgICA8PlxuICAgICAgICAgICAgICAgICAgICA8QWxlcnRUcmlhbmdsZSBzaXplPXsyNX0gLz5cbiAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz5QTFkgTE9BRCBGQUlMRUQ8L3N0cm9uZz5cbiAgICAgICAgICAgICAgICAgIDwvPlxuICAgICAgICAgICAgICAgICkgOiAoXG4gICAgICAgICAgICAgICAgICA8PlxuICAgICAgICAgICAgICAgICAgICA8VXBsb2FkIHNpemU9ezI1fSAvPlxuICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPkxPQUQgM0RHUyBQTFk8L3N0cm9uZz5cbiAgICAgICAgICAgICAgICAgICAgPHNwYW4+562J5b6F5pys5Zyw6auY5pav5rO85rqF5Zy65pmvPC9zcGFuPlxuICAgICAgICAgICAgICAgICAgPC8+XG4gICAgICAgICAgICAgICAgKX1cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICApfVxuXG4gICAgICAgICAgICB7c291cmNlSW1hZ2UgJiYgKFxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInZlY3RvcjNkLXNvdXJjZS1jaGlwXCIgdGl0bGU9e3NvdXJjZUltYWdlLm5hbWV9PlxuICAgICAgICAgICAgICAgIDxpbWcgYWx0PVwi5Y6f5aeL6auY5riF5Y+C6ICD5Zu+XCIgc3JjPXtzb3VyY2VJbWFnZS5kYXRhVVJMfSAvPlxuICAgICAgICAgICAgICAgIDxkaXY+XG4gICAgICAgICAgICAgICAgICA8c3Bhbj5TT1VSQ0UgTE9DS0VEPC9zcGFuPlxuICAgICAgICAgICAgICAgICAgPHN0cm9uZz57c291cmNlSW1hZ2UubmFtZX08L3N0cm9uZz5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICApfVxuICAgICAgICAgIDwvZGl2PlxuXG4gICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1jYW1lcmEtY29uc29sZVwiPlxuICAgICAgICAgICAgPENhbWVyYUF4aXMgbGFiZWw9XCJZQVcgLyDmlrnkvY3op5JcIiBtYXg9ezE4MH0gbWluPXstMTgwfSB2YWx1ZT17Y2FtZXJhLnlhd30gLz5cbiAgICAgICAgICAgIDxDYW1lcmFBeGlzIGxhYmVsPVwiUElUQ0ggLyDmnoHop5JcIiBtYXg9ezkwfSBtaW49ey05MH0gdmFsdWU9e2NhbWVyYS5waXRjaH0gLz5cbiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidmVjdG9yM2QtZGlzdGFuY2UtcmVhZG91dFwiPlxuICAgICAgICAgICAgICA8c3Bhbj5ESVNUQU5DRTwvc3Bhbj5cbiAgICAgICAgICAgICAgPHN0cm9uZz57Y2FtZXJhLmRpc3RhbmNlLnRvRml4ZWQoMil9PC9zdHJvbmc+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8L2Rpdj5cblxuICAgICAgICAgIDxmb290ZXIgY2xhc3NOYW1lPVwidmVjdG9yM2Qtdmlld3BvcnQtYWN0aW9uc1wiPlxuICAgICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgICBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1pY29uLWJ1dHRvblwiXG4gICAgICAgICAgICAgIGRpc2FibGVkPXtidXN5fVxuICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2aWV3cG9ydFJlZi5jdXJyZW50Py5yZXNldENhbWVyYSgpfVxuICAgICAgICAgICAgICB0aXRsZT1cIumHjee9ruebuOaculwiXG4gICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgICAgPlxuICAgICAgICAgICAgICA8Um90YXRlQ2N3IHNpemU9ezE3fSAvPlxuICAgICAgICAgICAgPC9idXR0b24+XG4gICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInZlY3RvcjNkLXNjZW5lLWZhY3RzXCI+XG4gICAgICAgICAgICAgIDxzcGFuPntsb2FkU3RhdGUucG9pbnRDb3VudCA/IGAke2xvYWRTdGF0ZS5wb2ludENvdW50LnRvTG9jYWxlU3RyaW5nKCl9IFNQTEFUU2AgOiBcIk5PIFNDRU5FXCJ9PC9zcGFuPlxuICAgICAgICAgICAgICA8c3Bhbj57Y2FtZXJhLnZpZXdwb3J0LndpZHRofSDDlyB7Y2FtZXJhLnZpZXdwb3J0LmhlaWdodH08L3NwYW4+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgY2xhc3NOYW1lPVwidmVjdG9yM2QtY2FwdHVyZS1idXR0b25cIlxuICAgICAgICAgICAgICBkaXNhYmxlZD17IWNhbkNhcHR1cmV9XG4gICAgICAgICAgICAgIG9uQ2xpY2s9e2hhbmRsZUNhcHR1cmV9XG4gICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgICAgPlxuICAgICAgICAgICAgICA8Q2FtZXJhIHNpemU9ezE3fSAvPlxuICAgICAgICAgICAgICDmjZXojrflvZPliY3plZzlpLRcbiAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgIDwvZm9vdGVyPlxuICAgICAgICA8L3NlY3Rpb24+XG5cbiAgICAgICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwidmVjdG9yM2Qtb3V0cHV0LXN0YWNrXCI+XG4gICAgICAgICAgPE91dHB1dFBhbmVsXG4gICAgICAgICAgICBiYWRnZT1cIkRSQUZUIC8gM0RHU1wiXG4gICAgICAgICAgICBlbXB0eUljb249ezxJbWFnZUljb24gc2l6ZT17Mjd9IC8+fVxuICAgICAgICAgICAgZW1wdHlMYWJlbD1cIuetieW+heaNleiOt+eyl+ezmeiNieWbvlwiXG4gICAgICAgICAgICBpbWFnZT17ZHJhZnRJbWFnZX1cbiAgICAgICAgICAgIHRpdGxlPVwi5b2T5YmN6KeG6KeS57uT5p6E6aqo5p62XCJcbiAgICAgICAgICAvPlxuXG4gICAgICAgICAgPE91dHB1dFBhbmVsXG4gICAgICAgICAgICBhY3Rpb25zPXtcbiAgICAgICAgICAgICAgcmVzdWx0ID8gKFxuICAgICAgICAgICAgICAgIDxidXR0b25cbiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT1cInZlY3RvcjNkLWljb24tYnV0dG9uXCJcbiAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9e2hhbmRsZURvd25sb2FkfVxuICAgICAgICAgICAgICAgICAgdGl0bGU9XCLkuIvovb3ph43loZHnu5PmnpxcIlxuICAgICAgICAgICAgICAgICAgdHlwZT1cImJ1dHRvblwiXG4gICAgICAgICAgICAgICAgPlxuICAgICAgICAgICAgICAgICAgPERvd25sb2FkIHNpemU9ezE3fSAvPlxuICAgICAgICAgICAgICAgIDwvYnV0dG9uPlxuICAgICAgICAgICAgICApIDogdW5kZWZpbmVkXG4gICAgICAgICAgICB9XG4gICAgICAgICAgICBiYWRnZT1cIkZJTkFMIC8gR1BULUlNQUdFLTJcIlxuICAgICAgICAgICAgZW1wdHlJY29uPXtidXN5ID8gPExvYWRlckNpcmNsZSBjbGFzc05hbWU9XCJzcGluXCIgc2l6ZT17Mjd9IC8+IDogPFNwYXJrbGVzIHNpemU9ezI3fSAvPn1cbiAgICAgICAgICAgIGVtcHR5TGFiZWw9e2J1c3kgPyBzdGF0dXNNZXNzYWdlIDogXCLnrYnlvoXnlLXlvbHnuqfph43loZHnu5PmnpxcIn1cbiAgICAgICAgICAgIGltYWdlPXtyZXN1bHQ/LmltYWdlfVxuICAgICAgICAgICAgdGl0bGU9XCLmnZDotKjkuI7nm7LljLrph43loZFcIlxuICAgICAgICAgIC8+XG5cbiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT1cInZlY3RvcjNkLWdlbmVyYXRpb24tY29uc29sZVwiPlxuICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1nZW5lcmF0ZS1jb3B5XCI+XG4gICAgICAgICAgICAgIDxzcGFuPlZJRVdQT0lOVDwvc3Bhbj5cbiAgICAgICAgICAgICAgPHN0cm9uZz57YW5hbHlzaXM/LnZpZXdEZXNjcmlwdGlvbiA/PyBmb3JtYXRWaWV3RGVzY3JpcHRpb24oZHJhZnRDYW1lcmEgPz8gY2FtZXJhKX08L3N0cm9uZz5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPGJ1dHRvblxuICAgICAgICAgICAgICBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1nZW5lcmF0ZS1idXR0b25cIlxuICAgICAgICAgICAgICBkaXNhYmxlZD17IWNhbkdlbmVyYXRlfVxuICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiB2b2lkIGhhbmRsZUdlbmVyYXRlKCl9XG4gICAgICAgICAgICAgIHR5cGU9XCJidXR0b25cIlxuICAgICAgICAgICAgPlxuICAgICAgICAgICAgICB7YnVzeSA/IDxMb2FkZXJDaXJjbGUgY2xhc3NOYW1lPVwic3BpblwiIHNpemU9ezE3fSAvPiA6IDxTcGFya2xlcyBzaXplPXsxN30gLz59XG4gICAgICAgICAgICAgIHtidXN5ID8gXCLlj4zmqKHlnovljY/kvZzkuK1cIiA6IFwi55Sf5oiQ55S15b2x57qn5paw6KeG6KeSXCJ9XG4gICAgICAgICAgICA8L2J1dHRvbj5cbiAgICAgICAgICA8L2Rpdj5cblxuICAgICAgICAgIHthbmFseXNpcyAmJiAoXG4gICAgICAgICAgICA8ZGV0YWlscyBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1hbmFseXNpcy1kZXRhaWxzXCI+XG4gICAgICAgICAgICAgIDxzdW1tYXJ5PuepuumXtOS/ruWkjeiuoeWIkiDCtyB7YW5hbHlzaXMucmVwYWlyTm90ZXMubGVuZ3RofSDpobnooaXlgb88L3N1bW1hcnk+XG4gICAgICAgICAgICAgIDxwPnthbmFseXNpcy5vcHRpbWl6ZWRQcm9tcHR9PC9wPlxuICAgICAgICAgICAgICB7YW5hbHlzaXMucmVwYWlyTm90ZXMubGVuZ3RoID4gMCAmJiAoXG4gICAgICAgICAgICAgICAgPHVsPlxuICAgICAgICAgICAgICAgICAge2FuYWx5c2lzLnJlcGFpck5vdGVzLm1hcCgobm90ZSwgaW5kZXgpID0+IChcbiAgICAgICAgICAgICAgICAgICAgPGxpIGtleT17YCR7aW5kZXh9LSR7bm90ZX1gfT57bm90ZX08L2xpPlxuICAgICAgICAgICAgICAgICAgKSl9XG4gICAgICAgICAgICAgICAgPC91bD5cbiAgICAgICAgICAgICAgKX1cbiAgICAgICAgICAgICAge3Jlc3VsdCAmJiAoXG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC10aW1pbmctcm93XCI+XG4gICAgICAgICAgICAgICAgICA8c3Bhbj7mjqjnkIYgeyhyZXN1bHQucmVhc29uaW5nRHVyYXRpb25NcyAvIDEwMDApLnRvRml4ZWQoMSl9czwvc3Bhbj5cbiAgICAgICAgICAgICAgICAgIDxzcGFuPua4suafkyB7KHJlc3VsdC5yZW5kZXJpbmdEdXJhdGlvbk1zIC8gMTAwMCkudG9GaXhlZCgxKX1zPC9zcGFuPlxuICAgICAgICAgICAgICAgICAgPHNwYW4+5oC76K6hIHsocmVzdWx0LnRvdGFsRHVyYXRpb25NcyAvIDEwMDApLnRvRml4ZWQoMSl9czwvc3Bhbj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgKX1cbiAgICAgICAgICAgIDwvZGV0YWlscz5cbiAgICAgICAgICApfVxuICAgICAgICA8L3NlY3Rpb24+XG4gICAgICA8L2Rpdj5cbiAgICA8L3NlY3Rpb24+XG4gICk7XG59XG5cbmZ1bmN0aW9uIFByb2dyZXNzU3RlcChwcm9wczoge1xuICBhY3RpdmU6IGJvb2xlYW47XG4gIGNvbXBsZXRlOiBib29sZWFuO1xuICBpbmRleDogc3RyaW5nO1xuICBsYWJlbDogc3RyaW5nO1xufSkge1xuICByZXR1cm4gKFxuICAgIDxkaXYgY2xhc3NOYW1lPXtgdmVjdG9yM2QtcHJvZ3Jlc3Mtc3RlcCR7cHJvcHMuYWN0aXZlID8gXCIgaXMtYWN0aXZlXCIgOiBcIlwifSR7cHJvcHMuY29tcGxldGUgPyBcIiBpcy1jb21wbGV0ZVwiIDogXCJcIn1gfT5cbiAgICAgIDxzcGFuPntwcm9wcy5jb21wbGV0ZSA/IDxDaGVjayBzaXplPXsxMn0gLz4gOiBwcm9wcy5pbmRleH08L3NwYW4+XG4gICAgICA8c3Ryb25nPntwcm9wcy5sYWJlbH08L3N0cm9uZz5cbiAgICA8L2Rpdj5cbiAgKTtcbn1cblxuZnVuY3Rpb24gQ2FtZXJhQXhpcyhwcm9wczoge1xuICBsYWJlbDogc3RyaW5nO1xuICBtaW46IG51bWJlcjtcbiAgbWF4OiBudW1iZXI7XG4gIHZhbHVlOiBudW1iZXI7XG59KSB7XG4gIGNvbnN0IHBlcmNlbnQgPSAoKHByb3BzLnZhbHVlIC0gcHJvcHMubWluKSAvIChwcm9wcy5tYXggLSBwcm9wcy5taW4pKSAqIDEwMDtcblxuICByZXR1cm4gKFxuICAgIDxkaXYgY2xhc3NOYW1lPVwidmVjdG9yM2QtY2FtZXJhLWF4aXNcIj5cbiAgICAgIDxkaXY+XG4gICAgICAgIDxzcGFuPntwcm9wcy5sYWJlbH08L3NwYW4+XG4gICAgICAgIDxzdHJvbmc+e2Zvcm1hdEFuZ2xlKHByb3BzLnZhbHVlKX08L3N0cm9uZz5cbiAgICAgIDwvZGl2PlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1heGlzLXRyYWNrXCI+XG4gICAgICAgIDxpIHN0eWxlPXt7IGxlZnQ6IGAke01hdGgubWluKDEwMCwgTWF0aC5tYXgoMCwgcGVyY2VudCkpfSVgIH19IC8+XG4gICAgICA8L2Rpdj5cbiAgICA8L2Rpdj5cbiAgKTtcbn1cblxuZnVuY3Rpb24gT3V0cHV0UGFuZWwocHJvcHM6IHtcbiAgYWN0aW9ucz86IFJlYWN0Tm9kZTtcbiAgYmFkZ2U6IHN0cmluZztcbiAgZW1wdHlJY29uOiBSZWFjdE5vZGU7XG4gIGVtcHR5TGFiZWw6IHN0cmluZztcbiAgaW1hZ2U/OiBzdHJpbmc7XG4gIHRpdGxlOiBzdHJpbmc7XG59KSB7XG4gIHJldHVybiAoXG4gICAgPHNlY3Rpb24gY2xhc3NOYW1lPVwidmVjdG9yM2Qtb3V0cHV0LXBhbmVsXCI+XG4gICAgICA8aGVhZGVyPlxuICAgICAgICA8ZGl2PlxuICAgICAgICAgIDxzcGFuPntwcm9wcy5iYWRnZX08L3NwYW4+XG4gICAgICAgICAgPHN0cm9uZz57cHJvcHMudGl0bGV9PC9zdHJvbmc+XG4gICAgICAgIDwvZGl2PlxuICAgICAgICB7cHJvcHMuYWN0aW9uc31cbiAgICAgIDwvaGVhZGVyPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJ2ZWN0b3IzZC1pbWFnZS1zdGFnZVwiPlxuICAgICAgICB7cHJvcHMuaW1hZ2UgPyAoXG4gICAgICAgICAgPGltZyBhbHQ9e3Byb3BzLnRpdGxlfSBzcmM9e3Byb3BzLmltYWdlfSAvPlxuICAgICAgICApIDogKFxuICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPVwidmVjdG9yM2Qtb3V0cHV0LWVtcHR5XCI+XG4gICAgICAgICAgICB7cHJvcHMuZW1wdHlJY29ufVxuICAgICAgICAgICAgPHNwYW4+e3Byb3BzLmVtcHR5TGFiZWx9PC9zcGFuPlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICApfVxuICAgICAgPC9kaXY+XG4gICAgPC9zZWN0aW9uPlxuICApO1xufVxuXG5mdW5jdGlvbiBmb3JtYXRBbmdsZSh2YWx1ZTogbnVtYmVyKSB7XG4gIGNvbnN0IG5vcm1hbGl6ZWQgPSBNYXRoLmFicyh2YWx1ZSkgPCAwLjAwNSA/IDAgOiB2YWx1ZTtcbiAgcmV0dXJuIGAke25vcm1hbGl6ZWQgPj0gMCA/IFwiK1wiIDogXCJcIn0ke25vcm1hbGl6ZWQudG9GaXhlZCgxKX3CsGA7XG59XG5cbmZ1bmN0aW9uIGZvcm1hdFZpZXdEZXNjcmlwdGlvbihjYW1lcmE6IFZlY3RvcjNEQ2FtZXJhUGFyYW1ldGVycykge1xuICBjb25zdCBob3Jpem9udGFsID1cbiAgICBNYXRoLmFicyhjYW1lcmEueWF3KSA8IDE1XG4gICAgICA/IFwi5q2j6Z2iXCJcbiAgICAgIDogTWF0aC5hYnMoY2FtZXJhLnlhdykgPiAxNjVcbiAgICAgICAgPyBcIuiDjOmdolwiXG4gICAgICAgIDogY2FtZXJhLnlhdyA+IDBcbiAgICAgICAgICA/IGDlj7PkvqcgJHtNYXRoLmFicyhjYW1lcmEueWF3KS50b0ZpeGVkKDApfcKwYFxuICAgICAgICAgIDogYOW3puS+pyAke01hdGguYWJzKGNhbWVyYS55YXcpLnRvRml4ZWQoMCl9wrBgO1xuICBjb25zdCB2ZXJ0aWNhbCA9XG4gICAgTWF0aC5hYnMoY2FtZXJhLnBpdGNoKSA8IDhcbiAgICAgID8gXCLlubPop4ZcIlxuICAgICAgOiBjYW1lcmEucGl0Y2ggPiAwXG4gICAgICAgID8gYOS/r+inhiAke2NhbWVyYS5waXRjaC50b0ZpeGVkKDApfcKwYFxuICAgICAgICA6IGDku7Dop4YgJHtNYXRoLmFicyhjYW1lcmEucGl0Y2gpLnRvRml4ZWQoMCl9wrBgO1xuXG4gIHJldHVybiBgJHtob3Jpem9udGFsfSDCtyAke3ZlcnRpY2FsfWA7XG59XG5cbmZ1bmN0aW9uIGZpbGVUb0RhdGFVUkwoZmlsZTogRmlsZSkge1xuICByZXR1cm4gbmV3IFByb21pc2U8c3RyaW5nPigocmVzb2x2ZSwgcmVqZWN0KSA9PiB7XG4gICAgY29uc3QgcmVhZGVyID0gbmV3IEZpbGVSZWFkZXIoKTtcbiAgICByZWFkZXIub25sb2FkID0gKCkgPT4ge1xuICAgICAgaWYgKHR5cGVvZiByZWFkZXIucmVzdWx0ID09PSBcInN0cmluZ1wiKSB7XG4gICAgICAgIHJlc29sdmUocmVhZGVyLnJlc3VsdCk7XG4gICAgICB9IGVsc2Uge1xuICAgICAgICByZWplY3QobmV3IEVycm9yKFwi5paH5Lu26K+75Y+W57uT5p6c5peg5pWI44CCXCIpKTtcbiAgICAgIH1cbiAgICB9O1xuICAgIHJlYWRlci5vbmVycm9yID0gKCkgPT4gcmVqZWN0KHJlYWRlci5lcnJvciA/PyBuZXcgRXJyb3IoXCLmlofku7bor7vlj5blpLHotKXjgIJcIikpO1xuICAgIHJlYWRlci5yZWFkQXNEYXRhVVJMKGZpbGUpO1xuICB9KTtcbn1cbiJdLCJmaWxlIjoiTDovQUlQcm9qZWN0L2FwaTJpbWcvc3JjL2NvbXBvbmVudHMvdmVjdG9yM2QvVmVjdG9yM0RWaWV3cG9pbnRXb3JrYmVuY2gudHN4In0=

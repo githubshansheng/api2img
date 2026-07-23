@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "durationMs": 106188,
+  "body": {
+    "created": 1784186745,
+    "background": "opaque",
+    "data": [
+      {
+        "b64_json": "[base64:2171644]"
+      }
+    ],
+    "output_format": "png",
+    "quality": "medium",
+    "size": "1672x941",
+    "usage": {
+      "input_tokens": 4579,
+      "input_tokens_details": {
+        "image_tokens": 2804,
+        "text_tokens": 1775
+      },
+      "output_tokens": 1158,
+      "output_tokens_details": {
+        "image_tokens": 1158,
+        "text_tokens": 0
+      },
+      "total_tokens": 5737
+    }
+  }
+}

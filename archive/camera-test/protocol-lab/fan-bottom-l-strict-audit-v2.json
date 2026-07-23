@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-07-16T10:15:32.590Z",
+  "model": "gpt-5.6-sol",
+  "status": 200,
+  "durationMs": 35741,
+  "view": "bottom",
+  "inputs": [
+    {
+      "id": "source",
+      "label": "原始正前方事实图",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\protocol-lab\\fan-medium-source-crop.png"
+    },
+    {
+      "id": "side",
+      "label": "严格右侧结构证据",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\2026-07-16-fan-side-right-90-v39\\result.png"
+    },
+    {
+      "id": "candidate",
+      "label": "仰视 -75°候选",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\2026-07-16T18-45-00-fan-bottom-x-minus75-v44-candidate-l-local-assembly-repair\\result.png"
+    }
+  ],
+  "audit": {
+    "view": "候选图为产品正前下方仰视，接近 Yaw 0°、Pitch -75°、Roll 0°",
+    "grille_ratio_estimate": 0.25,
+    "grille_projection_score": 4,
+    "motor_axis_score": 3,
+    "support_connection_score": 4,
+    "camera_parallax_score": 4,
+    "roll_zero_score": 4,
+    "active_head_tilt_detected": false,
+    "assembly_break_detected": false,
+    "strict_pass": true,
+    "visible_evidence": [
+      "圆形网罩投影为横向窄椭圆，外轮廓短轴约为长轴的0.25，位于0.20至0.35区间内。",
+      "后置电机壳投影在网罩中心下方，未与网罩中心形成横向错位。",
+      "支撑颈从电机壳后下部的投影位置连续向下进入竖直立柱，中间没有悬空或断接。",
+      "底座下缘与桌面前缘均近似水平，网罩长轴也保持水平，没有可见画面滚转。",
+      "画面大量显示天花板，桌面前缘位于低处且底座顶面暴露有限，符合相机位于桌面附近向上观察的视差。",
+      "网罩保持强烈压缩而非接近正圆，未显示机头主动俯仰迎向相机。"
+    ],
+    "defects": [
+      "后置电机壳在强仰视下与网罩下缘重叠较多，水平深度轴的独立延伸轮廓不如严格侧向证据清晰，因此电机轴判断保留轻微可见偏差。"
+    ],
+    "verdict": "严格通过：五项评分均不低于3，网罩比例合格，未发现主动机头俯仰、装配断裂或Roll错误。"
+  },
+  "usage": {
+    "input_tokens": 5676,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 0
+    },
+    "output_tokens": 1334,
+    "output_tokens_details": {
+      "reasoning_tokens": 909
+    },
+    "total_tokens": 7010
+  }
+}

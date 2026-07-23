@@ -12,9 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasOutpaintWorkbench } from "../../components/canvas-outpaint/CanvasOutpaintWorkbench";
 import {
   SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER,
+  SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER_EN,
   buildSingleImageCameraPose,
   buildSingleImageCameraPrompt,
   type SingleImageViewpointAnalysis,
+  type SingleImagePromptLanguage,
   type SingleImageViewpointResult,
   type XYZRotation
 } from "../../domain";
@@ -81,10 +83,32 @@ vi.mock(
 
 const GUIDE_IMAGE = "data:image/png;base64,cG9zZS1ndWlkZQ==";
 const CAMERA_VIEW_IMAGE = "data:image/png;base64,Y2FtZXJhLXZpZXc=";
-const RESULT_IMAGE = "data:image/png;base64,cmVuZGVyZWQ=";
+const RESULT_IMAGES: Record<SingleImagePromptLanguage, string> = {
+  zh: "data:image/png;base64,cmVuZGVyZWQtemg=",
+  en: "data:image/png;base64,cmVuZGVyZWQtZW4="
+};
 const TARGET_ROTATION: XYZRotation = { x: 720, y: -450, z: 45 };
-const SERVER_RENDER_PROMPT =
-  `【锁定相机协议｜服务端确定性生成，禁止改写】\n${SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER}\n服务端最终渲染提示词`;
+
+function createServerRenderPrompt(
+  rotation: XYZRotation,
+  cameraDistance = 5,
+  language: SingleImagePromptLanguage = "zh",
+  outputSize = "2048x1152"
+) {
+  const prompt = buildSingleImageCameraPrompt(rotation, cameraDistance, {
+    sourceWidth: 1600,
+    sourceHeight: 900,
+    outputSize
+  });
+  const cameraProtocol =
+    language === "en"
+      ? prompt.deterministicPromptEn
+      : prompt.deterministicPromptZh;
+
+  return `${cameraProtocol}\n${language === "en" ? "Server final render prompt" : "服务端最终渲染提示词"}`;
+}
+
+const SERVER_RENDER_PROMPT = createServerRenderPrompt(TARGET_ROTATION);
 
 const ANALYSIS: SingleImageViewpointAnalysis = {
   subjectCategory: "product_object",
@@ -116,21 +140,33 @@ class MockImage {
 }
 
 function createResult(
-  rotation: XYZRotation = TARGET_ROTATION
+  rotation: XYZRotation = TARGET_ROTATION,
+  cameraDistance = 5,
+  promptLanguage: SingleImagePromptLanguage = "zh"
 ): SingleImageViewpointResult {
   return {
     ...ANALYSIS,
     requestId: "single-view-success",
-    image: RESULT_IMAGE,
+    image: RESULT_IMAGES[promptLanguage],
     imageMimeType: "image/png",
     pose: buildSingleImageCameraPose(rotation),
-    cameraPrompt: buildSingleImageCameraPrompt(rotation, 5),
-    renderPrompt: SERVER_RENDER_PROMPT,
-    reasoningModel: "gpt-5.6-sol",
+    cameraPrompt: buildSingleImageCameraPrompt(rotation, cameraDistance, {
+      sourceWidth: 1600,
+      sourceHeight: 900,
+      outputSize: "2048x1152"
+    }),
+    renderPrompt: createServerRenderPrompt(
+      rotation,
+      cameraDistance,
+      promptLanguage
+    ),
+    promptLanguage,
+    outputSize: "2048x1152",
+    reasoningModel: "disabled",
     imageModel: "gpt-image-2",
-    reasoningDurationMs: 120,
+    reasoningDurationMs: 0,
     renderingDurationMs: 280,
-    totalDurationMs: 400
+    totalDurationMs: 280
   };
 }
 
@@ -165,7 +201,7 @@ async function uploadSource(input: HTMLInputElement, name = "source.png") {
   await waitFor(() =>
     expect(
       (screen.getByRole("button", {
-        name: "生成该角度的新视图"
+        name: "中英文各生成一张并对比"
       }) as HTMLButtonElement).disabled
     ).toBe(false)
   );
@@ -190,34 +226,147 @@ afterEach(() => {
 });
 
 describe("single-image XYZ viewpoint workbench", () => {
-  it("sends cumulative XYZ angles, a clean pose guide, and a full camera view", async () => {
-    let resolveGeneration:
-      | ((result: SingleImageViewpointResult) => void)
-      | undefined;
+  it("keeps the default user constraint separate from the whole-scene camera protocol", () => {
+    renderWorkbench();
+
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "中文补充约束"
+        }) as HTMLTextAreaElement
+      ).value
+    ).toContain("延续同一现实瞬间");
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "English additional constraint"
+        }) as HTMLTextAreaElement
+      ).value
+    ).toContain("Continue the same real-world moment");
+    expect(
+      screen.getByText(/画面随镜头移动而重新成像和构图/)
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/不是让画面中的某一个对象在原背景中单独转动/)
+    ).toBeTruthy();
+  });
+
+  it("shows shared gpt-5.6-sol reasoning before the two Image 2 renders", async () => {
+    const pending: Array<{
+      language: SingleImagePromptLanguage;
+      handlers: {
+        onStage?: (
+          stage: "reasoning" | "rendering",
+          message: string,
+          analysis?: SingleImageViewpointAnalysis,
+          cameraPrompt?: ReturnType<typeof buildSingleImageCameraPrompt>,
+          renderPrompt?: string,
+          promptLanguage?: SingleImagePromptLanguage
+        ) => void;
+      };
+      resolve: (value: SingleImageViewpointResult) => void;
+    }> = [];
     mocks.generate.mockImplementation(
       (
-        _payload: unknown,
+        payload: { prompt_language: SingleImagePromptLanguage },
+        handlers: (typeof pending)[number]["handlers"]
+      ) =>
+        new Promise<SingleImageViewpointResult>((resolve) => {
+          pending.push({
+            language: payload.prompt_language,
+            handlers,
+            resolve
+          });
+        })
+    );
+    const { sourceInput } = renderWorkbench();
+    await uploadSource(sourceInput);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "中英文各生成一张并对比" })
+    );
+
+    await waitFor(() => expect(pending).toHaveLength(2));
+    expect(
+      screen.getByText(/gpt-5.6-sol 正在共享分析原图、目标投影与完整机位图/)
+    ).toBeTruthy();
+    expect(
+      document.querySelector(".single-view-live-state")?.className
+    ).toContain("status-reasoning");
+    expect(
+      screen.getByText(/gpt-5.6-sol 正在生成中英文共享视觉事实包/)
+    ).toBeTruthy();
+
+    act(() => {
+      for (const item of pending) {
+        item.handlers.onStage?.(
+          "rendering",
+          `gpt-image-2 正在使用${item.language === "en" ? "英文" : "中文"}提示词从目标新机位重新拍摄整个场景`,
+          ANALYSIS,
+          buildSingleImageCameraPrompt({ x: 0, y: 0, z: 0 }, 5),
+          createServerRenderPrompt(
+            { x: 0, y: 0, z: 0 },
+            5,
+            item.language
+          ),
+          item.language
+        );
+      }
+    });
+
+    expect(
+      document.querySelector(".single-view-live-state")?.className
+    ).toContain("status-rendering");
+    expect(
+      screen.getByText(/gpt-image-2 正在执行中文提示词重拍/)
+    ).toBeTruthy();
+
+    await act(async () => {
+      for (const item of pending) {
+        item.resolve(
+          createResult({ x: 0, y: 0, z: 0 }, 5, item.language)
+        );
+      }
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("英文主结果与中文对照均已完成")
+      ).toBeTruthy()
+    );
+  });
+
+  it("sends cumulative XYZ angles, a clean pose guide, and a full camera view", async () => {
+    mocks.generate.mockImplementation(
+      (
+        payload: { prompt_language: SingleImagePromptLanguage },
         handlers: {
           onStage?: (
             stage: "reasoning" | "rendering",
             message: string,
             analysis?: SingleImageViewpointAnalysis,
             cameraPrompt?: ReturnType<typeof buildSingleImageCameraPrompt>,
-            renderPrompt?: string
+            renderPrompt?: string,
+            promptLanguage?: SingleImagePromptLanguage
           ) => void;
         }
       ) => {
+        const language = payload.prompt_language;
+        const renderPrompt = createServerRenderPrompt(
+          TARGET_ROTATION,
+          5,
+          language
+        );
         handlers.onStage?.(
           "rendering",
-          "gpt-image-2 is redrawing the complete frame",
+          `gpt-image-2 正在使用${language === "en" ? "英文" : "中文"}提示词从目标新机位重新拍摄整个场景`,
           ANALYSIS,
           buildSingleImageCameraPrompt(TARGET_ROTATION, 5),
-          SERVER_RENDER_PROMPT
+          renderPrompt,
+          language
         );
 
-        return new Promise((resolve) => {
-          resolveGeneration = resolve;
-        });
+        return Promise.resolve(createResult(TARGET_ROTATION, 5, language));
       }
     );
     const { sourceInput } = renderWorkbench();
@@ -233,50 +382,66 @@ describe("single-image XYZ viewpoint workbench", () => {
       target: { value: "45" }
     });
     fireEvent.click(screen.getByRole("button", {
-      name: "生成该角度的新视图"
+      name: "中英文各生成一张并对比"
     }));
 
-    await waitFor(() => expect(mocks.generate).toHaveBeenCalledTimes(1));
-    const [payload, , signal] = mocks.generate.mock.calls[0]!;
-    expect(payload).toMatchObject({
-      source_image: expect.stringMatching(/^data:image\/png;base64,/),
-      pose_guide_image: GUIDE_IMAGE,
-      camera_pose_image: CAMERA_VIEW_IMAGE,
-      rotation_degrees: TARGET_ROTATION,
-      camera_distance: 5,
-      reasoning_model: "gpt-5.6-sol",
-      image_model: "gpt-image-2",
-      output_size: "2048x1152",
-      endpoint_override: {
-        baseURL: "https://proxy.example",
-        editURL: "https://images.example/v1/images/edits"
-      }
-    });
-    expect(signal).toBeInstanceOf(AbortSignal);
-    expect(
-      await screen.findByText(
-        "[Step 2/2] gpt-image-2 正在重绘目标相机视角"
-      )
-    ).toBeTruthy();
-    const promptIsland = document.querySelector(
-      ".single-view-prompt-island pre"
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalledTimes(2));
+    const callsByLanguage = Object.fromEntries(
+      mocks.generate.mock.calls.map((call) => [
+        call[0].prompt_language,
+        call
+      ])
+    ) as Record<SingleImagePromptLanguage, typeof mocks.generate.mock.calls[number]>;
+
+    for (const language of ["zh", "en"] as const) {
+      const [payload, , signal] = callsByLanguage[language]!;
+      expect(payload).toMatchObject({
+        source_image: expect.stringMatching(/^data:image\/png;base64,/),
+        pose_guide_image: GUIDE_IMAGE,
+        camera_pose_image: CAMERA_VIEW_IMAGE,
+        rotation_degrees: TARGET_ROTATION,
+        camera_distance: 5,
+        source_width: 1600,
+        source_height: 900,
+        prompt_language: language,
+        reasoning_model: "gpt-5.6-sol",
+        image_model: "gpt-image-2",
+        output_size: "2048x1152",
+        endpoint_override: {
+          baseURL: "https://proxy.example",
+          editURL: "https://images.example/v1/images/edits"
+        }
+      });
+      expect(signal).toBeInstanceOf(AbortSignal);
+    }
+
+    expect(callsByLanguage.zh[0].user_prompt).toContain("延续同一现实瞬间");
+    expect(callsByLanguage.en[0].user_prompt).toContain(
+      "Continue the same real-world moment"
     );
-    expect(promptIsland?.textContent).toBe(SERVER_RENDER_PROMPT);
-
-    await act(async () => {
-      resolveGeneration?.(createResult());
-      await Promise.resolve();
-    });
-
     expect(
       (await screen.findByRole("img", {
-        name: "AI 新视角"
+        name: "中文对照结果"
       })) as HTMLImageElement
-    ).toHaveProperty("src", RESULT_IMAGE);
-    expect(screen.getByText("空间推演摘要")).toBeTruthy();
+    ).toHaveProperty("src", RESULT_IMAGES.zh);
     expect(
-      (screen.getByRole("link", { name: "下载" }) as HTMLAnchorElement).href
-    ).toBe(RESULT_IMAGE);
+      (await screen.findByRole("img", {
+        name: "English 主结果（推荐）"
+      })) as HTMLImageElement
+    ).toHaveProperty("src", RESULT_IMAGES.en);
+    expect(screen.queryByText("空间推演摘要")).toBeNull();
+    expect(screen.getByText(/gpt-image-2 整场景重拍/)).toBeTruthy();
+    expect(
+      (screen.getByRole("link", { name: "中文对照" }) as HTMLAnchorElement).href
+    ).toBe(RESULT_IMAGES.zh);
+    expect(
+      (screen.getByRole("link", { name: "EN 主结果" }) as HTMLAnchorElement).href
+    ).toBe(RESULT_IMAGES.en);
+
+    fireEvent.click(screen.getByRole("tab", { name: "EN" }));
+    expect(
+      document.querySelector(".single-view-prompt-island pre")?.textContent
+    ).toBe(createServerRenderPrompt(TARGET_ROTATION, 5, "en"));
   });
 
   it("refreshes the local camera protocol without calling the API", async () => {
@@ -294,17 +459,21 @@ describe("single-image XYZ viewpoint workbench", () => {
 
     await waitFor(() => {
       expect(promptIsland()).not.toBe(initialPrompt);
-      expect(promptIsland()).toContain("基准右侧机位");
-      expect(promptIsland()).toContain("Y=+90.00°");
+      expect(promptIsland()).toContain(
+        "对象右侧机位（原图观看者左侧轨道）"
+      );
+      expect(promptIsland()).toContain("画面左边移动 90.00°");
     });
 
-    fireEvent.change(screen.getByLabelText("景别控制值"), {
+    fireEvent.change(screen.getByLabelText("观察距离与景别控制值"), {
       target: { value: "8" }
     });
 
     await waitFor(() => {
       expect(promptIsland()).toContain("特写");
-      expect(promptIsland()).toContain("距离控制值 8.0/10");
+      expect(promptIsland()).toContain(
+        "景别：特写。观察距离控制值：8.0/10"
+      );
     });
     expect(mocks.generate).not.toHaveBeenCalled();
   });
@@ -319,37 +488,50 @@ describe("single-image XYZ viewpoint workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "背面 180°" }));
 
     await waitFor(() => {
-      expect(promptIsland()).toContain("离散目标视角：基准正后方机位");
-      expect(promptIsland()).toContain("Y=+180.00°");
+      expect(promptIsland()).toContain("目标标签为基准正后方机位");
+      expect(promptIsland()).toContain("正后方 180.00°");
     });
 
     fireEvent.click(screen.getByTestId("mock-pose-viewport"));
 
     await waitFor(() => {
-      expect(promptIsland()).toContain("离散目标视角：基准右侧机位");
-      expect(promptIsland()).toContain("Y=+90.00°");
+      expect(promptIsland()).toContain(
+        "目标标签为对象右侧机位（原图观看者左侧轨道）"
+      );
+      expect(promptIsland()).toContain("画面左边移动 90.00°");
     });
     expect(mocks.generate).not.toHaveBeenCalled();
   });
 
   it("marks the previous result and final prompt stale after a camera change", async () => {
-    mocks.generate.mockResolvedValueOnce(createResult());
+    const initialRotation: XYZRotation = { x: 0, y: 0, z: 0 };
+    const initialRenderPrompt = createServerRenderPrompt(
+      initialRotation,
+      5,
+      "en"
+    );
+    mocks.generate.mockImplementation(
+      (payload: { prompt_language: SingleImagePromptLanguage }) =>
+        Promise.resolve(
+          createResult(initialRotation, 5, payload.prompt_language)
+        )
+    );
     const { sourceInput } = renderWorkbench();
     await uploadSource(sourceInput);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "生成该角度的新视图" })
+      screen.getByRole("button", { name: "中英文各生成一张并对比" })
     );
 
     expect(
       await screen.findByRole("img", {
-        name: "AI 新视角"
+        name: "中文对照结果"
       })
-    ).toHaveProperty("src", RESULT_IMAGE);
+    ).toHaveProperty("src", RESULT_IMAGES.zh);
     await waitFor(() => {
       expect(
         document.querySelector(".single-view-prompt-island pre")?.textContent
-      ).toBe(SERVER_RENDER_PROMPT);
+      ).toBe(initialRenderPrompt);
     });
 
     fireEvent.change(screen.getByLabelText("X 轴累计角度"), {
@@ -359,102 +541,217 @@ describe("single-image XYZ viewpoint workbench", () => {
     await waitFor(() => {
       expect(
         screen.queryByRole("img", {
-          name: "AI 新视角"
+          name: "中文对照结果"
         })
-      ).toBeNull();
+      ).toHaveProperty("src", RESULT_IMAGES.zh);
+      expect(
+        screen.getByText("相机或生成参数已更新，上一机位结果已保留")
+      ).toBeTruthy();
+      expect(screen.getByText("上一机位结果")).toBeTruthy();
+      const retainedPreview = screen
+        .getByRole("img", { name: "English 主结果（推荐）" })
+        .closest("figure");
+      expect(retainedPreview?.textContent).toContain(
+        "X 0° · Y 0° · Z 0°"
+      );
+      expect(retainedPreview?.textContent).not.toContain("X 45°");
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "相机协议" }));
+    await waitFor(() => {
       expect(
         document.querySelector(".single-view-prompt-island pre")?.textContent
-      ).not.toBe(SERVER_RENDER_PROMPT);
+      ).not.toBe(initialRenderPrompt);
       expect(
         document.querySelector(".single-view-prompt-island pre")?.textContent
-      ).toContain("X=+45.00°");
+      ).toContain("raise the camera 45.00 degrees above the scene center");
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "最终提示词" }));
     expect(
       document.querySelector(".single-view-prompt-island pre")?.textContent
-    ).toContain("服务端实际发送给 GPT Image 2");
+    ).toBe(initialRenderPrompt);
+    expect(
+      document.querySelector(".single-view-prompt-island em")?.textContent
+    ).toBe("上一机位");
   });
 
-  it("clears a final prompt produced by an older camera protocol", async () => {
-    mocks.generate.mockResolvedValueOnce({
-      ...createResult(),
-      renderPrompt:
-        "【锁定相机协议｜服务端确定性生成，禁止改写】\n相机协议版本：2.2｜目标机位重新成像，屏幕投影必须重建\n主体右侧表面必须显露。\n禁止让主体主动改变姿态、朝向、构型或场景布局来伪装相机运动。"
-    });
+  it("clears legacy camera semantics even when the marker is current", async () => {
+    mocks.generate.mockImplementation(
+      (payload: { prompt_language: SingleImagePromptLanguage }) =>
+        Promise.resolve(
+          payload.prompt_language === "zh"
+            ? {
+                ...createResult(TARGET_ROTATION, 5, "zh"),
+                renderPrompt:
+                  `【锁定相机协议｜服务端确定性生成，禁止改写】\n${SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER}\n主体右侧表面必须显露。\n禁止让主体主动改变姿态、朝向、构型或场景布局来伪装相机运动。`
+              }
+            : createResult(TARGET_ROTATION, 5, "en")
+        )
+    );
     const { sourceInput } = renderWorkbench();
     await uploadSource(sourceInput);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "生成该角度的新视图" })
+      screen.getByRole("button", { name: "中英文各生成一张并对比" })
     );
 
     expect(
       await screen.findByText(
-        "检测到旧版提示词，已清除，请按当前目标机位重新生成"
+        "检测到不兼容的服务端提示词，已移除对应结果"
       )
     ).toBeTruthy();
     expect(
       screen.queryByRole("img", {
-        name: "AI 新视角"
+        name: "中文对照结果"
       })
     ).toBeNull();
     await waitFor(() =>
       expect(
         document.querySelector(".single-view-prompt-island pre")?.textContent
-      ).toContain(SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER)
+      ).toContain(SINGLE_IMAGE_CAMERA_PROTOCOL_MARKER_EN)
     );
   });
 
-  it("describes camera motion with protocol 2.4 reprojection semantics", () => {
+  it("describes protocol 7.0 as a whole-scene camera recapture", () => {
     renderWorkbench();
 
     expect(
-      screen.getByText(/主体世界状态保持连续/).textContent
+      screen.getByText(/XYZ 直接改变虚拟相机机位/).textContent
     ).toContain(
-      "屏幕朝向、轮廓、可见结构、遮挡与背景视差由目标相机重新投影"
+      "整幅画面随镜头移动而重新成像和构图"
     );
-    expect(screen.queryByText(/主体主动转身/)).toBeNull();
+    expect(
+      screen.getByText(/XYZ 直接改变虚拟相机机位/).textContent
+    ).toContain(
+      "不是让画面中的某一个对象在原背景中单独转动"
+    );
+    expect(
+      screen.getByText(/XYZ 直接改变虚拟相机机位/).textContent
+    ).toContain("不锁定原图朝屏幕的方向");
+    expect(screen.queryByText(/主体世界状态保持连续/)).toBeNull();
   });
 
-  it("invalidates generated output after distance and user-constraint changes", async () => {
-    mocks.generate
-      .mockResolvedValueOnce(createResult())
-      .mockResolvedValueOnce(createResult());
+  it("preserves generated output after distance and user-constraint changes", async () => {
+    mocks.generate.mockImplementation(
+      (payload: {
+        camera_distance: number;
+        prompt_language: SingleImagePromptLanguage;
+      }) =>
+        Promise.resolve(
+          createResult(
+            { x: 0, y: 0, z: 0 },
+            payload.camera_distance,
+            payload.prompt_language
+          )
+        )
+    );
     const { sourceInput } = renderWorkbench();
     await uploadSource(sourceInput);
     const generateButton = () =>
-      screen.getByRole("button", { name: "生成该角度的新视图" });
+      screen.getByRole("button", {
+        name: "中英文各生成一张并对比"
+      });
 
     fireEvent.click(generateButton());
     expect(
-      await screen.findByRole("img", { name: "AI 新视角" })
-    ).toHaveProperty("src", RESULT_IMAGE);
+      await screen.findByRole("img", { name: "中文对照结果" })
+    ).toHaveProperty("src", RESULT_IMAGES.zh);
 
-    fireEvent.change(screen.getByLabelText("景别控制值"), {
+    fireEvent.change(screen.getByLabelText("观察距离与景别控制值"), {
       target: { value: "8" }
     });
 
-    await waitFor(() =>
-      expect(screen.queryByRole("img", { name: "AI 新视角" })).toBeNull()
-    );
-    expect(screen.getByText("参数已更新，等待重新生成")).toBeTruthy();
-
-    fireEvent.click(generateButton());
-    expect(
-      await screen.findByRole("img", { name: "AI 新视角" })
-    ).toHaveProperty("src", RESULT_IMAGE);
-
-    fireEvent.change(screen.getByLabelText("视角重绘约束"), {
-      target: { value: "保持同一人物，但保留新的中文补充约束。" }
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("img", { name: "中文对照结果" })
+      ).toHaveProperty("src", RESULT_IMAGES.zh);
+      expect(
+        screen.getByText("相机或生成参数已更新，上一机位结果已保留")
+      ).toBeTruthy();
+      expect(screen.getByText("上一机位结果")).toBeTruthy();
     });
 
-    await waitFor(() =>
-      expect(screen.queryByRole("img", { name: "AI 新视角" })).toBeNull()
-    );
+    fireEvent.click(generateButton());
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalledTimes(4));
+    await screen.findByText("英文主结果与中文对照均已完成");
+    expect(screen.queryByText("上一机位结果")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("中文补充约束"), {
+      target: { value: "延续同一场景，但保留新的中文补充约束。" }
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("img", { name: "中文对照结果" })
+      ).toHaveProperty("src", RESULT_IMAGES.zh);
+      expect(screen.getByText("上一机位结果")).toBeTruthy();
+    });
     expect(
       document.querySelector(".single-view-prompt-island pre")?.textContent
-    ).not.toBe(SERVER_RENDER_PROMPT);
+    ).toBe(createServerRenderPrompt({ x: 0, y: 0, z: 0 }, 8, "en"));
+  });
+
+  it("opens generated previews in a detail dialog and exposes downloads", async () => {
+    mocks.generate.mockImplementation(
+      (payload: { prompt_language: SingleImagePromptLanguage }) =>
+        Promise.resolve(
+          createResult(TARGET_ROTATION, 5, payload.prompt_language)
+        )
+    );
+    const { sourceInput } = renderWorkbench();
+    await uploadSource(sourceInput);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "中英文各生成一张并对比" })
+    );
+
+    const preview = await screen.findByRole("img", {
+      name: "English 主结果（推荐）"
+    });
+    expect(preview).toHaveProperty("src", RESULT_IMAGES.en);
+
+    const previewDownload = screen.getByRole("link", {
+      name: "下载English 主结果（推荐）"
+    }) as HTMLAnchorElement;
+    expect(previewDownload.href).toBe(RESULT_IMAGES.en);
+    expect(previewDownload.download).toBe(
+      "single-image-view-en-single-view-success.png"
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "放大查看English 主结果（推荐）"
+      })
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "English 主结果（推荐）详情"
+    });
+    expect(dialog).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "English 主结果（推荐）详情"
+      })
+    ).toHaveProperty("src", RESULT_IMAGES.en);
+    expect(dialog.textContent).toContain("X 720° · Y -450° · Z 45°");
+    expect(dialog.textContent).toContain("disabled → gpt-image-2");
+    expect(dialog.textContent).toContain("single-view-success");
+
+    const detailDownload = screen.getByRole("link", {
+      name: "下载"
+    }) as HTMLAnchorElement;
+    expect(detailDownload.href).toBe(RESULT_IMAGES.en);
+    expect(detailDownload.download).toBe(
+      "single-image-view-en-single-view-success.png"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭图片详情" }));
+    expect(
+      screen.queryByRole("dialog", {
+        name: "English 主结果（推荐）详情"
+      })
+    ).toBeNull();
   });
 
   it("resets XYZ, Roll, and framing to their zero-view defaults", async () => {
@@ -470,7 +767,7 @@ describe("single-image XYZ viewpoint workbench", () => {
     fireEvent.change(screen.getByLabelText("Z 轴累计角度"), {
       target: { value: "315" }
     });
-    fireEvent.change(screen.getByLabelText("景别控制值"), {
+    fireEvent.change(screen.getByLabelText("观察距离与景别控制值"), {
       target: { value: "9" }
     });
     fireEvent.click(screen.getByRole("button", { name: "重置 XYZ 机位" }));
@@ -478,13 +775,18 @@ describe("single-image XYZ viewpoint workbench", () => {
     expect(screen.getByLabelText("X 轴累计角度")).toHaveProperty("value", "0");
     expect(screen.getByLabelText("Y 轴累计角度")).toHaveProperty("value", "0");
     expect(screen.getByLabelText("Z 轴累计角度")).toHaveProperty("value", "0");
-    expect(screen.getByLabelText("景别控制值")).toHaveProperty("value", "5");
+    expect(
+      screen.getByLabelText("观察距离与景别控制值")
+    ).toHaveProperty("value", "5");
     expect(
       document.querySelector(".single-view-prompt-island pre")?.textContent
-    ).toContain("离散目标视角：基准正前方机位 + 平视 + 中景");
+    ).toContain("景别：中景。观察距离控制值：5.0/10");
     expect(
       document.querySelector(".single-view-prompt-island pre")?.textContent
-    ).toContain("Roll 0°");
+    ).toContain("大白话机位：使用原图零度正面机位");
+    expect(
+      document.querySelector(".single-view-prompt-island pre")?.textContent
+    ).toContain("Roll Z=0.00°");
   });
 
   it("copies and collapses the prompt tool island", async () => {
@@ -536,7 +838,7 @@ describe("single-image XYZ viewpoint workbench", () => {
     await uploadSource(sourceInput);
 
     fireEvent.click(screen.getByRole("button", {
-      name: "生成该角度的新视图"
+      name: "中英文各生成一张并对比"
     }));
     fireEvent.click(await screen.findByRole("button", { name: "取消生成" }));
 
@@ -546,24 +848,26 @@ describe("single-image XYZ viewpoint workbench", () => {
   });
 
   it("does not let an aborted request overwrite the idle state after replacing the source", async () => {
-    let rejectGeneration: ((reason?: unknown) => void) | undefined;
+    const rejectGenerations: Array<(reason?: unknown) => void> = [];
     mocks.generate.mockImplementation(
       () =>
         new Promise((_resolve, reject) => {
-          rejectGeneration = reject;
+          rejectGenerations.push(reject);
         })
     );
     const view = renderWorkbench();
     await uploadSource(view.sourceInput);
 
     fireEvent.click(screen.getByRole("button", {
-      name: "生成该角度的新视图"
+      name: "中英文各生成一张并对比"
     }));
     await screen.findByRole("button", { name: "取消生成" });
     await uploadSource(view.sourceInput, "replacement.png");
 
     await act(async () => {
-      rejectGeneration?.(new DOMException("Aborted", "AbortError"));
+      rejectGenerations.forEach((rejectGeneration) =>
+        rejectGeneration(new DOMException("Aborted", "AbortError"))
+      );
       await Promise.resolve();
     });
 
@@ -576,7 +880,7 @@ describe("single-image XYZ viewpoint workbench", () => {
   });
 
   it("shows retry diagnostics from the single-image viewpoint API", async () => {
-    mocks.generate.mockRejectedValueOnce(
+    mocks.generate.mockRejectedValue(
       new SingleImageViewpointApiError("上游图像服务繁忙", {
         code: "SINGLE_VIEW_IMAGE_UPSTREAM_503",
         retryable: true
@@ -586,7 +890,7 @@ describe("single-image XYZ viewpoint workbench", () => {
     await uploadSource(sourceInput);
 
     fireEvent.click(screen.getByRole("button", {
-      name: "生成该角度的新视图"
+      name: "中英文各生成一张并对比"
     }));
 
     const alert = await screen.findByRole("alert");

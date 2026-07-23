@@ -1,0 +1,17 @@
+TASK: Correct the camera viewpoint of image 1. This is a viewpoint repair, not a new front-facing portrait.
+INPUT ROLES:
+- Image 1 is the current high-quality draft. Keep its square composition, room, window light, clothing, hairstyle, color, and depth of field, but reject its near-frontal facial projection.
+- Image 2 is the authoritative identity reference for the same woman.
+- Image 3 is a rough depth-and-camera guide. Use only its target side, foreshortening direction, and parallax; do not copy its dots or dark background.
+CAMERA CORRECTION:
+- Place the virtual camera on the woman's own RIGHT, equivalent to moving toward the LEFT edge of the original source frame by about 56 degrees.
+- Re-photograph the same stationary woman and room from a clear right-front three-quarter camera position. Do not make the woman turn back to face the camera.
+- In the FINAL image, the woman's own RIGHT ear, right hairline, and right cheek are the near side and form the LEFT facial contour.
+- Her own LEFT ear, currently visible on the RIGHT side of image 1, must disappear behind the far facial contour and hair.
+- Her nose tip and facial forward axis must point toward the RIGHT side of the final image. The far left eye and left cheek must be visibly narrower behind the nasal bridge.
+- This must read as a substantial 56-degree camera change, not a five-degree variation. If both eyes remain similarly wide or the left ear remains visible on image-right, the edit has failed.
+SCENE:
+- Move the camera around the complete fixed room, so the window, wall, furniture, chair, floor, and background parallax all respond to the same target viewpoint.
+- Naturally infer the newly visible right-side anatomy and newly framed environment. Preserve the same person and realistic anatomy without mirroring the source pixels.
+- Keep the slight +7.1-degree elevated camera position, approximately -2-degree frame roll, wide framing, shallow natural depth of field, and exact 2048x2048 square output.
+OUTPUT: one clean photorealistic corrected image, no text, guides, dots, borders, or watermarks.

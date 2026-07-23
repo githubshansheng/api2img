@@ -1,0 +1,297 @@
+{
+  "targetURL": "http://127.0.0.1:5173/?page=editing",
+  "sessionId": "73de4ca8-170e-4f76-90f7-6477d1f733f6",
+  "checkedAt": "2026-07-13T18:57:33.360Z",
+  "viewports": [
+    {
+      "name": "desktop-1440x900",
+      "width": 1440,
+      "height": 900,
+      "metrics": {
+        "title": "AI 图片生成与编辑工作台",
+        "sessionVisible": true,
+        "documentScrollWidth": 1440,
+        "viewportWidth": 1440,
+        "horizontalOverflow": false,
+        "rectangles": {
+          "session": {
+            "left": 301,
+            "top": 219,
+            "right": 531,
+            "bottom": 859,
+            "width": 230,
+            "height": 640
+          },
+          "canvas": {
+            "left": 543,
+            "top": 219,
+            "right": 997,
+            "bottom": 859,
+            "width": 454,
+            "height": 640
+          },
+          "inspector": {
+            "left": 1009,
+            "top": 219,
+            "right": 1399,
+            "bottom": 859,
+            "width": 390,
+            "height": 640
+          }
+        },
+        "overlaps": [],
+        "visibleTabs": [
+          {
+            "text": "对话",
+            "width": 91,
+            "visible": true
+          },
+          {
+            "text": "版本",
+            "width": 91,
+            "visible": true
+          },
+          {
+            "text": "协作",
+            "width": 91,
+            "visible": true
+          },
+          {
+            "text": "运营",
+            "width": 91,
+            "visible": true
+          }
+        ]
+      },
+      "screenshot": ".artifacts\\image-editing-qa\\2026-07-14\\desktop-1440x900.png"
+    },
+    {
+      "name": "desktop-1366x720",
+      "width": 1366,
+      "height": 720,
+      "metrics": {
+        "title": "AI 图片生成与编辑工作台",
+        "sessionVisible": true,
+        "documentScrollWidth": 1366,
+        "viewportWidth": 1366,
+        "horizontalOverflow": false,
+        "rectangles": {
+          "session": {
+            "left": 297,
+            "top": 215,
+            "right": 497,
+            "bottom": 683,
+            "width": 200,
+            "height": 468
+          },
+          "canvas": {
+            "left": 509,
+            "top": 215,
+            "right": 967,
+            "bottom": 683,
+            "width": 458,
+            "height": 468
+          },
+          "inspector": {
+            "left": 979,
+            "top": 215,
+            "right": 1329,
+            "bottom": 683,
+            "width": 350,
+            "height": 468
+          }
+        },
+        "overlaps": [],
+        "visibleTabs": [
+          {
+            "text": "对话",
+            "width": 81,
+            "visible": true
+          },
+          {
+            "text": "版本",
+            "width": 81,
+            "visible": true
+          },
+          {
+            "text": "协作",
+            "width": 81,
+            "visible": true
+          },
+          {
+            "text": "运营",
+            "width": 81,
+            "visible": true
+          }
+        ]
+      },
+      "screenshot": ".artifacts\\image-editing-qa\\2026-07-14\\desktop-1366x720.png"
+    },
+    {
+      "name": "tablet-768x1024",
+      "width": 768,
+      "height": 1024,
+      "metrics": {
+        "title": "AI 图片生成与编辑工作台",
+        "sessionVisible": true,
+        "documentScrollWidth": 753,
+        "viewportWidth": 753,
+        "horizontalOverflow": false,
+        "rectangles": {
+          "session": {
+            "left": 37,
+            "top": 374,
+            "right": 267,
+            "bottom": 1094,
+            "width": 230,
+            "height": 720
+          },
+          "canvas": {
+            "left": 279,
+            "top": 374,
+            "right": 716,
+            "bottom": 1094,
+            "width": 437,
+            "height": 720
+          },
+          "inspector": {
+            "left": 37,
+            "top": 1106,
+            "right": 716,
+            "bottom": 1826,
+            "width": 679,
+            "height": 720
+          }
+        },
+        "overlaps": [],
+        "visibleTabs": [
+          {
+            "text": "对话",
+            "width": 163,
+            "visible": true
+          },
+          {
+            "text": "版本",
+            "width": 163,
+            "visible": true
+          },
+          {
+            "text": "协作",
+            "width": 163,
+            "visible": true
+          },
+          {
+            "text": "运营",
+            "width": 163,
+            "visible": true
+          }
+        ]
+      },
+      "screenshot": ".artifacts\\image-editing-qa\\2026-07-14\\tablet-768x1024.png"
+    },
+    {
+      "name": "mobile-390x844",
+      "width": 390,
+      "height": 844,
+      "metrics": {
+        "title": "AI 图片生成与编辑工作台",
+        "sessionVisible": true,
+        "documentScrollWidth": 390,
+        "viewportWidth": 390,
+        "horizontalOverflow": false,
+        "rectangles": {
+          "session": {
+            "left": 21,
+            "top": 411,
+            "right": 369,
+            "bottom": 695,
+            "width": 348,
+            "height": 284
+          },
+          "canvas": {
+            "left": 21,
+            "top": 707,
+            "right": 369,
+            "bottom": 1307,
+            "width": 348,
+            "height": 600
+          },
+          "inspector": {
+            "left": 21,
+            "top": 1319,
+            "right": 369,
+            "bottom": 2070,
+            "width": 348,
+            "height": 751
+          }
+        },
+        "overlaps": [],
+        "visibleTabs": [
+          {
+            "text": "对话",
+            "width": 82,
+            "visible": true
+          },
+          {
+            "text": "版本",
+            "width": 82,
+            "visible": true
+          },
+          {
+            "text": "协作",
+            "width": 82,
+            "visible": true
+          },
+          {
+            "text": "运营",
+            "width": 82,
+            "visible": true
+          }
+        ]
+      },
+      "screenshot": ".artifacts\\image-editing-qa\\2026-07-14\\mobile-390x844.png"
+    }
+  ],
+  "interactions": {
+    "archiveRestore": {
+      "archivedListable": true,
+      "editingLocked": {
+        "composerDisabled": true,
+        "modeControlsDisabled": true
+      },
+      "restoredStatus": "active",
+      "auditChanges": [
+        [
+          "archived"
+        ],
+        [
+          "restored"
+        ]
+      ]
+    },
+    "sseReconnect": {
+      "failedHandshake": true,
+      "sawReconnecting": true,
+      "recoveredConnected": true
+    },
+    "touchZoomSubmit": {
+      "pointerType": "touch",
+      "selectedPixels": 20456,
+      "zoom": {
+        "before": "100%",
+        "after": "125%"
+      },
+      "turnStatus": "awaiting_clarification",
+      "persistedMaskSemantics": "selection-alpha",
+      "screenshot": ".artifacts\\image-editing-qa\\2026-07-14\\mobile-390x844-touch-submit.png"
+    },
+    "refreshPersistence": {
+      "sessionIdPreserved": true,
+      "turnCountBefore": 1,
+      "turnCountAfter": 1,
+      "latestTurnStatus": "awaiting_clarification",
+      "sseConnectedAfterReload": true
+    }
+  },
+  "consoleErrors": []
+}

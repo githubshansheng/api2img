@@ -1,0 +1,35 @@
+{
+  "requestId": "f849d799-2901-46c4-a402-f99a0e661329",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2387000,
+    "sha256": "5c2209c61e226801c50a766adfbee4ebbee81fe9340c3d6b8dd90d8412d3ee2b"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 2848960,
+    "sha256": "3d4815ad3d6df0f3db2aa3b9b9d0430669e7af845656bdecead29640d6422026"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 2672252,
+    "sha256": "41b8b37df65f618c4537a51775733897828b2463e3d7e6aa552660211e4e060d"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "camera_distance": 8,
+  "user_prompt": "保持同一主体身份或型号、同一现实瞬间的动作或装配关系、材质、光线与原始场景。先移动相机到锁定机位，再从该机位重新生成整幅画面；不得保留源图二维投影，不得以主体自身转动、卡片翻转或背景不变代替相机运动。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "C:\\Users\\Administrator\\.codex\\attachments\\e2951585-d3eb-47a8-bf74-de1a125effcb\\image-1.png"
+}

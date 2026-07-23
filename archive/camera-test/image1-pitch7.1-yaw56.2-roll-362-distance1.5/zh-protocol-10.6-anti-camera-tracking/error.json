@@ -1,0 +1,6 @@
+{
+  "code": "SINGLE_VIEW_UPSTREAM_524",
+  "message": "新视角图像生成失败：HTTP 524",
+  "requestId": "70901f12-c966-4d2b-90ff-4ef94fb70e9d",
+  "retryable": true
+}

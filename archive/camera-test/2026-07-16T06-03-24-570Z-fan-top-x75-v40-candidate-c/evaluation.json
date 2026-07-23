@@ -1,0 +1,24 @@
+{
+  "protocol": "4.0-candidate-c",
+  "passed": false,
+  "target": {
+    "grilleMinorMajorRatio": [0.2, 0.35],
+    "subjectHeightRatio": [0.45, 0.55]
+  },
+  "observedApprox": {
+    "grilleMinorMajorRatio": 0.36,
+    "subjectHeightRatio": 0.56
+  },
+  "checks": {
+    "cameraElevationChanged": true,
+    "fanHeadStayedWorldLocked": true,
+    "grilleForeshorteningPassed": false,
+    "mediumShotScalePassed": false,
+    "identityGeometryPassed": false
+  },
+  "findings": [
+    "The requested tighter framing was applied.",
+    "Moving too close introduced wide-angle perspective and weakened the target grille compression.",
+    "The rear housing and base proportions changed too much from the source fan."
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "camera_side": "source_frame_left",
+  "estimated_yaw_degrees": 52,
+  "direction_pass": true,
+  "yaw_strength_pass": true,
+  "anti_tracking_pass": true,
+  "whole_scene_reprojection_pass": true,
+  "aspect_ratio_pass": true,
+  "overall_pass": true,
+  "evidence_zh": [
+    "相机结果符合沿原图画面左侧轨道环绕的方向：人物鼻尖及面部前向轴明显投向最终画面右侧。",
+    "人物自身右侧成为近侧，右耳及右侧面部轮廓更突出；远侧左眼、左颊明显收窄，形成足够强的三分之二侧面。",
+    "相对零度原图，面部由接近正面变为显著侧转，水平偏航估算约52°，位于40°至72°的通过区间内。",
+    "人物没有追随新相机继续正对镜头：双眼投影宽度不再接近，鼻梁和鼻尖具有明显横向投影。",
+    "变化不局限于人物：取景范围、窗框、窗台、后方桌柜、椅背及人物与背景的相对遮挡关系均发生一致改变，具备整场景重新投影特征。",
+    "输出画面为1:1方形画幅。"
+  ],
+  "failures_zh": [],
+  "correction_prompt_zh": "当前结果已满足目标机位的主要可观察判据，无需修正；保持人物鼻尖朝画面右侧、人物自身右侧为近侧、远侧左眼与左颊明显收窄，并维持窗户、家具、椅子和人物之间一致的透视与视差关系及1:1方形画幅。",
+  "durationMs": 24472,
+  "model": "gpt-5.6-sol",
+  "source": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png",
+  "result": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\zh-protocol-10.6-anti-camera-tracking-retry\\result.png",
+  "camera": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\camera-pose.png"
+}

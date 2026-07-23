@@ -1,0 +1,35 @@
+{
+  "requestId": "f597e611-0cca-4833-bdc9-fbe535652297",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2387000,
+    "sha256": "5c2209c61e226801c50a766adfbee4ebbee81fe9340c3d6b8dd90d8412d3ee2b"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 2568672,
+    "sha256": "8bb6fb39302aaa0e71be5b43e516396d1bf8937289840cf4446326c8179eea2c"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 2478656,
+    "sha256": "e013c26e862f419b526ca2a223bed110b7b88f4feb313a1a1222b9eb64f5f052"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "user_prompt": "延续同一现实瞬间的场景内容、空间关系、材质、光线、色彩和风格，不增加无关概念。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\archive\\camera-test\\2026-07-16T13-43-46-596Z-matrix-v8-portrait-side-right-90\\source.png"
+}

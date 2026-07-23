@@ -1,0 +1,35 @@
+{
+  "camera_side": "source_frame_left",
+  "estimated_yaw_degrees": 52,
+  "direction_pass": true,
+  "yaw_strength_pass": true,
+  "estimated_pitch_degrees": 6,
+  "pitch_pass": true,
+  "estimated_roll_degrees": 0,
+  "roll_pass": true,
+  "distance_framing_pass": true,
+  "depth_of_field_pass": true,
+  "anti_tracking_pass": true,
+  "whole_scene_reprojection_pass": true,
+  "aspect_ratio_pass": false,
+  "overall_pass": false,
+  "evidence_zh": [
+    "待验收图呈明显右向三分之二侧脸，鼻尖及面部前向轴投向最终画面右侧。",
+    "人物自身右侧成为近侧，近侧耳部清晰可见；远侧左眼、左颊明显收窄，符合从原图画面左侧轨道环绕的方向。",
+    "脸部水平转角显著，鼻梁产生清楚的横向投影，估算偏航约52°，处于40°至72°强度通过区间。",
+    "机位略高于人物并有轻微向下观察，但没有形成夸张俯拍，估算Pitch约+6°。",
+    "窗框、窗台、人物、椅背、后方桌柜及墙面共同发生了符合侧向换位的构图、遮挡和空间层次变化，不是仅旋转人物或单纯扩图。",
+    "人物相对画面明显缩小，由近距离头肩特写变为包含上半身、椅子和更多室内环境的远景构图。",
+    "人物面部与头发保持清晰，后方家具和植物自然虚化，景深层次与原图基准相符。",
+    "输出画面为竖向矩形，约4:5比例，并非要求的1:1方形画幅。"
+  ],
+  "failures_zh": [
+    "画幅比例不合格：待验收图是竖向矩形而非1:1方形。"
+  ],
+  "correction_prompt_zh": "保持当前约+56.2°左侧轨道环绕、轻微高机位、约-2°逆时针滚转、远景距离及现有整场景透视不变，将最终输出改为严格1:1方形画幅。通过扩展左右环境或重新构图实现方形，不要裁切放大人物；人物仍应保持较小占比，并保留左侧窗户、椅背以及右后方桌柜等环境信息。",
+  "durationMs": 30187,
+  "model": "gpt-5.6-sol",
+  "source": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png",
+  "result": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\zh-protocol-10.6-anti-camera-tracking-retry\\result.png",
+  "camera": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\camera-pose.png"
+}

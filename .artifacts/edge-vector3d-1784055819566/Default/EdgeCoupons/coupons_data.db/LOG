@@ -1,0 +1,5 @@
+2026/07/15-03:03:46.660 5a94 Creating DB L:\AIProject\api2img\.artifacts\edge-vector3d-1784055819566\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/07/15-03:03:46.821 5a94 Reusing MANIFEST L:\AIProject\api2img\.artifacts\edge-vector3d-1784055819566\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/07/15-03:03:50.107 2d14 Level-0 table #5: started
+2026/07/15-03:03:50.110 2d14 Level-0 table #5: 682909 bytes OK
+2026/07/15-03:03:50.114 2d14 Delete type=0 #3

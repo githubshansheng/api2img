@@ -1,0 +1,35 @@
+{
+  "requestId": "4712f331-79c1-4b6b-a6dd-37869e5e0b3e",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2182836,
+    "sha256": "87b6ef7e93adacecd006fc460bb9a1783549a7a968eda06a4d7c86cccde8cd00"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 19496,
+    "sha256": "ada4db8ca5a41e630bd29817f645112cde99a6282d38eb0bfb733efffd80be1d"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 100572,
+    "sha256": "ba2dd72b810f217b2cfde2f4290a5da6c0fbfb61749ae8f77384c43260b0421a"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 90,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "user_prompt": "目标是物理相机绕同一静止厨房场景和同一台固定风扇向右环绕90度后的真实照片。唯一运动物体是相机；风扇头、支柱、底座、果盘、玻璃杯、杂志、橱柜、电器和冰箱在世界坐标中的位置与朝向全部固定，风扇不得摆头、转向或俯仰。最终必须从厨房侧方观察：风扇网罩呈严格薄侧向投影并显露前后厚度；前景桌沿、果盘、杯子、杂志、后方窗户、台面电器、橱柜与冰箱必须因新相机位置产生分层视差、不同水平位移、遮挡和出入画变化。若背景仍保持原图正面排列，或仅风扇机头转为侧面，则判定失败。Roll保持0度。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "C:\\Users\\Administrator\\.codex\\attachments\\e2951585-d3eb-47a8-bf74-de1a125effcb\\image-2.png"
+}

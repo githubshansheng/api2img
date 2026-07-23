@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import type {
   SingleImageViewpointAnalysis,
   SingleImageViewpointRequest
 } from "../../domain";
 import {
+  assertSingleImageRenderPromptSafety,
+  buildSingleImageAnalyzedRenderPrompt,
+  buildSingleImageDirectRenderPrompt,
   buildSingleImageEditForm,
   buildSingleImageReasoningRequest,
   parseSingleImageEditResponse,
+  parseSingleImageBilingualReasoningResponse,
   parseSingleImageReasoningResponse,
+  normalizeSingleImageRenderedImage,
   resolveSingleImageViewpointEndpoints,
-  sanitizeProjectionAcceptanceCriteria,
   validateSingleImageViewpointRequest
 } from "../../../server/single-image-viewpoint/single-image-viewpoint-service";
 
@@ -34,7 +39,9 @@ function createRequest(
       z: -15
     },
     camera_distance: 6,
-    user_prompt: "保持同一片日落海滩。",
+    source_width: 1600,
+    source_height: 900,
+    user_prompt: "延续同一片日落海滩及其光线。",
     background_mode: "preserve_scene",
     api_key: "sk-test",
     reasoning_model: "gpt-5.6-sol",
@@ -48,36 +55,89 @@ function createRequest(
   };
 }
 
-const analysis: SingleImageViewpointAnalysis = {
+const legacyAnalysis: SingleImageViewpointAnalysis = {
   subjectCategory: "product_object",
-  optimizedPrompt: "冲突指令：把相机改成正面平视远景。",
-  viewDescription: "冲突的正面平视视图",
-  sourceViewDescription: "原图左前三分之四视角",
-  targetViewDescription: "错误目标：正面平视",
-  relativeCameraMotion: "错误相机动作：向左环绕九十度。",
+  optimizedPrompt: "把相机改成正面。",
+  viewDescription: "旧分析",
+  sourceViewDescription: "旧源视角",
+  targetViewDescription: "旧目标视角",
+  relativeCameraMotion: "旧相机描述",
+  visibilityConstraints: ["主体右侧表面必须显露。"],
+  occlusionConstraints: ["主体左侧表面必须退隐。"],
+  identityConstraints: ["Do not change the subject's pose or orientation."],
+  hiddenSurfacePlan: ["补全耳朵、下颌和肩部。"],
+  scenePlan: ["保留源图背景二维构图。"],
+  uncertaintyNotes: ["旧分析不参与正式渲染。"]
+};
+
+const analyzedEnglish: SingleImageViewpointAnalysis = {
+  subjectCategory: "product_object",
+  optimizedPrompt:
+    "Preserve the same white tabletop fan, molded plastic, soft daylight, and warm kitchen color palette.",
+  viewDescription: "Bilingual visual fact plan.",
+  sourceViewDescription: "The source shows the fan grille facing the camera.",
+  targetViewDescription: "Server-locked target view.",
+  relativeCameraMotion: "Server-locked camera motion.",
   visibilityConstraints: [
-    "前网罩在屏幕水平方向的投影显著收窄，罩体和电机壳厚度清晰可见。",
-    "主体右侧表面必须显露。",
-    "将相机改成左侧面 90°。"
+    "The front grille and circular rim become visibly narrow while the motor housing depth remains continuous."
   ],
   occlusionConstraints: [
-    "远侧支架被前网罩和近侧支架合理遮挡。",
-    "主体左侧表面必须退隐。"
+    "The far support is naturally occluded by the nearer housing and grille."
   ],
   identityConstraints: [
-    "保持同一主体的类别、身份、结构、材质和标记。",
-    "禁止让主体主动改变姿态、朝向、构型或场景布局来伪装相机运动。",
-    "Do not change the subject's pose or orientation.",
-    "错误人物模板：补全脸颊、耳朵和肩部。"
+    "Keep the same fan model, white molded plastic, base, stem, grille spacing, and control layout."
   ],
   hiddenSurfacePlan: [
-    "依据已识别类别和结构规律保守补全不可见表面。",
-    "主体右侧表面需要按类别补全。",
-    "右侧表面需要补全。",
-    "错误解剖模板：重建下颌线和鼻孔。"
+    "Complete the newly visible motor housing and rear grille with conservative manufacturing continuity."
   ],
-  scenePlan: ["保持日落海滩、光源方向与色彩调性。"],
-  uncertaintyNotes: ["远侧细节在原图中不可确认。"]
+  scenePlan: [
+    "Continue the kitchen walls, tabletop, cabinetry, window light, and foreground-to-background depth."
+  ],
+  uncertaintyNotes: [
+    "Use the simplest construction consistent with the visible product."
+  ]
+};
+
+const analyzedChinese: SingleImageViewpointAnalysis = {
+  subjectCategory: "product_object",
+  optimizedPrompt:
+    "保持同一台白色桌面风扇、注塑塑料、柔和日光和暖色厨房调性。",
+  viewDescription: "双语视觉事实计划。",
+  sourceViewDescription: "原图中风扇网罩朝向镜头。",
+  targetViewDescription: "服务端锁定目标视角。",
+  relativeCameraMotion: "服务端锁定相机运动。",
+  visibilityConstraints: [
+    "前网罩与圆形边框投影明显收窄，同时保持电机外壳的真实纵深。"
+  ],
+  occlusionConstraints: [
+    "远侧支架被近侧外壳和网罩自然遮挡。"
+  ],
+  identityConstraints: [
+    "保持同一风扇型号、白色注塑塑料、底座、立柱、网罩间距和控制布局。"
+  ],
+  hiddenSurfacePlan: [
+    "按制造结构连续性保守补全新显露的电机外壳与后网罩。"
+  ],
+  scenePlan: [
+    "延续厨房墙面、桌面、橱柜、窗户光线与前后空间纵深。"
+  ],
+  uncertaintyNotes: ["采用与可见产品一致的最简结构。"]
+};
+
+const analyzedPersonChinese: SingleImageViewpointAnalysis = {
+  subjectCategory: "person",
+  optimizedPrompt: "保持同一位年轻女性、白色上衣与窗侧柔光。",
+  viewDescription: "人物视觉事实计划。",
+  sourceViewDescription:
+    "源图屏幕右侧即人物自身左耳清晰可见，屏幕左侧即人物自身右耳被头发遮住。",
+  targetViewDescription: "服务端锁定目标视角。",
+  relativeCameraMotion: "服务端锁定相机运动。",
+  visibilityConstraints: ["人物自身右耳与右颊应自然显露。"],
+  occlusionConstraints: ["人物自身左耳与左颊应自然退隐。"],
+  identityConstraints: ["保持同一人物身份、发型、服装与光线。"],
+  hiddenSurfacePlan: ["保守补全人物自身右耳与右侧发际。"],
+  scenePlan: ["延续窗框、墙面、木质家具和室内纵深。"],
+  uncertaintyNotes: ["不可确认细节采用自然、保守的人体结构。"]
 };
 
 describe("single-image viewpoint service", () => {
@@ -115,100 +175,290 @@ describe("single-image viewpoint service", () => {
     );
 
     expect(defaults.camera_distance).toBe(5);
+    expect(defaults.prompt_language).toBe("en");
     expect(defaults.reasoning_model).toBe("gpt-5.6-sol");
     expect(defaults.image_model).toBe("gpt-image-2");
 
-    expect(() =>
-      validateSingleImageViewpointRequest(
-        createRequest({ camera_distance: 10.1 })
-      )
-    ).toThrowError(
-      expect.objectContaining({
-        code: "SINGLE_VIEW_CAMERA_DISTANCE_INVALID",
-        statusCode: 400
+    const square = validateSingleImageViewpointRequest(
+      createRequest({
+        source_width: 1254,
+        source_height: 1254,
+        output_size: "2048x1152"
       })
     );
+    expect(square.output_size).toBe("2048x2048");
+    expect(square.cameraPrompt.sourceAspectRatioLabel).toBe("1:1");
+    expect(square.cameraPrompt.outputSize).toBe("2048x2048");
   });
 
-  it("builds structured spatial reasoning with explicit guide limitations", () => {
+  it("builds a deterministic whole-scene recapture prompt without category assumptions", () => {
+    const request = validateSingleImageViewpointRequest(createRequest());
+    const prompt = buildSingleImageDirectRenderPrompt(
+      request.pose,
+      request.user_prompt,
+      request.camera_distance,
+      "zh",
+      {
+        sourceWidth: request.source_width,
+        sourceHeight: request.source_height,
+        outputSize: request.output_size
+      }
+    );
+
+    expect(prompt).toContain(
+      "相机直绘版本：10.6｜画面侧主指令、反镜头跟随与整场景新视锥重拍"
+    );
+    expect(prompt).toContain(
+      "【唯一最高优先级任务｜相机新视角重拍】"
+    );
+    expect(prompt).toContain(
+      "通过新视锥重拍完整且固定的三维场景"
+    );
+    expect(prompt).toContain(
+      "核心口令：将镜头转向中心人物/物品的左侧，自动补全原图不可见的部分，包括背景、人物的镜像、物品的镜像"
+    );
+    expect(prompt).toContain(
+      "“人物的镜像、物品的镜像”专指依据真实类别和原图证据进行三维对侧补全"
+    );
+    expect(prompt).toContain(
+      "特写"
+    );
+    expect(prompt).toContain(
+      "沿该侧轨道环绕 90.00°"
+    );
+    expect(prompt).toContain(
+      "镜头位于原图画面左侧"
+    );
+    expect(prompt).toContain(
+      "画面随镜头转动并重新成像"
+    );
+    expect(prompt).toContain(
+      "前景、中心对象、环境、背景、地面和画面边缘必须一起更新透视、视差、尺度、遮挡和构图"
+    );
+    expect(prompt).toContain(
+      "不是只让人物或物品转身"
+    );
+    expect(prompt).toContain(
+      "补全目标机位可见、但图像 1 未拍到或被遮挡的全部范围"
+    );
+    expect(prompt).toContain(
+      "不是整图水平翻转、镜面倒影、复制对象或复制原图像素"
+    );
+    expect(prompt).toContain(
+      "若结果仍接近原图正面、背景仍冻结在原构图"
+    );
+    expect(prompt).toContain(
+      "第一张图是画面元素与完整环境的事实参考；第二张图是干净的旋转目标投影图"
+    );
+    expect(prompt).toContain(
+      "第三张图是完整 XYZ 机位图"
+    );
+    expect(prompt).toContain(
+      "不要照抄引导图中的卡片、坐标轴、旋转环、边框、底色、标签或预览外观"
+    );
+    expect(prompt).toContain(
+      "看回同一场景中心"
+    );
+    expect(prompt).toContain(
+      "保持图像 1 的 16:9 宽高比，最终输出 2048x1152"
+    );
+    expect(prompt).toContain("延续同一片日落海滩及其光线");
+    expect(prompt).not.toMatch(
+      /主体(?:右|左)侧表面|耳朵|下颌|肩部|风扇|网罩|人体器官/
+    );
+    expect(prompt).not.toContain("禁止改变姿态");
+    expect(prompt).not.toContain("禁止改变朝向");
+  });
+
+  it("builds one bilingual reasoning request with the source, clean guide, and full camera view", () => {
     const request = buildSingleImageReasoningRequest(createRequest()) as {
-      model: string;
       input: Array<{ content: Array<Record<string, unknown>> }>;
+      model: string;
       text: {
         format: {
-          strict: boolean;
-          schema: { required: string[] };
+          schema: {
+            properties: Record<string, unknown>;
+            required: string[];
+          };
         };
       };
     };
     const content = request.input[0]!.content;
+    const instruction = String(content[0]?.text);
 
     expect(request.model).toBe("gpt-5.6-sol");
-    expect(content[0]?.text).toContain(
-      "【锁定相机协议｜服务端确定性生成，禁止改写】"
+    expect(instruction).toContain(
+      "图像3是完整 XYZ 机位图，用于核对坐标轴、旋转环、Roll 和机位方向"
     );
-    expect(content[0]?.text).toContain(
-      "离散目标视角：基准右侧机位 + 高角度观察 + 特写"
+    expect(instruction).toContain(
+      "zh 与 en 表达完全相同的事实"
     );
-    expect(content[0]?.text).toContain("Y=+450.00°");
-    expect(content[0]?.text).toContain(
-      "最终生图模型会同时接收图像 1 和图像 2"
+    expect(instruction).toContain(
+      "服务端只读机位参数"
     );
-    expect(content[0]?.text).toContain(
-      "最终生图模型不会接收图像 3"
+    expect(instruction).toContain(
+      "hidden_surface_plan 必须列出因目标偏航、俯仰、Roll 或景别变化而首次可见"
     );
-    expect(content[0]?.text).toContain(
-      "optimized_prompt 必须使用中文"
+    expect(instruction).toContain(
+      "scene_plan 必须明确补全因新视锥、新景别或新构图而进入画面"
     );
-    expect(content[0]?.text).toContain(
-      "必须是按主体类别生成、可从最终像素客观验收的投影条件"
+    expect(instruction).toContain(
+      "\"cumulativeXYZ\":{\"x\":25,\"y\":450,\"z\":-15}"
     );
-    expect(content[0]?.text).toContain(
-      "禁止输出“主体右侧表面”“主体左侧表面”"
-    );
-    expect(content[0]?.text).toContain(
-      "世界坐标中的同一动作事件、关节相对关系、装配状态和场景拓扑只作为三维连续基准，不是原图屏幕姿态或朝向锁"
-    );
-    expect(content[0]?.text).toContain(
-      "屏幕坐标中的主体朝向、轮廓、投影宽度、近远侧结构、遮挡顺序和背景视差必须由目标相机重新投影"
-    );
-    expect(content[0]?.text).toContain(
-      "人物、动物或物体在屏幕中的朝向、轮廓和可见结构必须随目标机位变化"
-    );
-    expect(content[0]?.text).toContain(
-      "不得修改、纠正、近似、重述或重新定义"
-    );
-    expect(content[1]).toMatchObject({
-      type: "input_image",
-      image_url: createRequest().source_image
-    });
-    expect(content[2]).toMatchObject({
-      type: "input_image",
-      image_url: createRequest().pose_guide_image
-    });
-    expect(content[3]).toMatchObject({
-      type: "input_image",
-      image_url: createRequest().camera_pose_image
-    });
-    expect(request.text.format.strict).toBe(true);
-    expect(request.text.format.schema.required).toContain(
-      "hidden_surface_plan"
-    );
-    expect(request.text.format.schema.required).toContain(
-      "source_view_description"
-    );
-    expect(request.text.format.schema.required).toContain(
-      "visibility_constraints"
-    );
+    expect(instruction).not.toContain(createRequest().user_prompt);
+    expect(content.slice(1)).toEqual([
+      {
+        type: "input_image",
+        image_url: createRequest().source_image,
+        detail: "high"
+      },
+      {
+        type: "input_image",
+        image_url: createRequest().pose_guide_image,
+        detail: "low"
+      },
+      {
+        type: "input_image",
+        image_url: createRequest().camera_pose_image,
+        detail: "high"
+      }
+    ]);
+    expect(request.text.format.schema.required).toEqual([
+      "subject_category",
+      "zh",
+      "en"
+    ]);
+    expect(request.text.format.schema.properties).toHaveProperty("zh");
+    expect(request.text.format.schema.properties).toHaveProperty("en");
   });
 
-  it("builds an unmasked full-image edit using the source and clean pose guide", async () => {
+  it("adds the selected language facts without letting analysis redefine the camera", () => {
+    const request = validateSingleImageViewpointRequest(createRequest());
+    const englishPrompt = buildSingleImageAnalyzedRenderPrompt(
+      analyzedEnglish,
+      request.pose,
+      "Continue the same kitchen.",
+      request.camera_distance,
+      "en",
+      {
+        sourceWidth: request.source_width,
+        sourceHeight: request.source_height,
+        outputSize: request.output_size
+      }
+    );
+    const chinesePrompt = buildSingleImageAnalyzedRenderPrompt(
+      analyzedChinese,
+      request.pose,
+      "延续同一厨房。",
+      request.camera_distance,
+      "zh",
+      {
+        sourceWidth: request.source_width,
+        sourceHeight: request.source_height,
+        outputSize: request.output_size
+      }
+    );
+
+    expect(englishPrompt).toContain(
+      "[gpt-5.6-sol category gate | no free camera wording]"
+    );
+    expect(englishPrompt).toContain(
+      request.cameraPrompt.deterministicPromptEn
+    );
+    expect(englishPrompt).toContain(
+      "Detected category: product or object."
+    );
+    expect(englishPrompt).toContain(
+      "turn the camera toward the LEFT side of the central person or object"
+    );
+    expect(chinesePrompt).toContain(
+      "【gpt-5.6-sol 类别闸门｜不输出自由机位描述】"
+    );
+    expect(chinesePrompt).toContain(
+      request.cameraPrompt.deterministicPromptZh
+    );
+    expect(chinesePrompt).toContain(
+      "识别类别：产品或物体。"
+    );
+    expect(englishPrompt).not.toContain(
+      analyzedEnglish.identityConstraints[0]
+    );
+    expect(chinesePrompt).not.toContain(
+      analyzedChinese.identityConstraints[0]
+    );
+    expect(chinesePrompt).toContain(
+      "核心口令：将镜头转向中心人物/物品的左侧"
+    );
+    expect(englishPrompt).not.toContain(
+      analyzedEnglish.targetViewDescription
+    );
+    expect(chinesePrompt).not.toContain(
+      analyzedChinese.targetViewDescription
+    );
+    expect(() =>
+      assertSingleImageRenderPromptSafety(englishPrompt)
+    ).not.toThrow();
+    expect(() =>
+      assertSingleImageRenderPromptSafety(chinesePrompt)
+    ).not.toThrow();
+  });
+
+  it("adds a person-only final-screen discriminator without leaking anatomy into product prompts", () => {
+    const request = validateSingleImageViewpointRequest(
+      createRequest({
+        rotation_degrees: { x: 7.1, y: 56.2, z: -362 },
+        camera_distance: 1.5,
+        source_width: 1254,
+        source_height: 1254,
+        output_size: "2048x2048"
+      })
+    );
+    const personPrompt = buildSingleImageAnalyzedRenderPrompt(
+      analyzedPersonChinese,
+      request.pose,
+      "延续同一室内场景。",
+      request.camera_distance,
+      "zh",
+      {
+        sourceWidth: request.source_width,
+        sourceHeight: request.source_height,
+        outputSize: request.output_size
+      }
+    );
+    const productPrompt = buildSingleImageAnalyzedRenderPrompt(
+      analyzedChinese,
+      request.pose,
+      "延续同一厨房。",
+      request.camera_distance,
+      "zh",
+      {
+        sourceWidth: request.source_width,
+        sourceHeight: request.source_height,
+        outputSize: request.output_size
+      }
+    );
+
+    expect(personPrompt).toContain("【人物专用最终屏幕方向判据】");
+    expect(personPrompt).toContain(
+      "人物自身右耳、右侧发际和右颊属于近侧，必须构成最终画面左侧轮廓"
+    );
+    expect(personPrompt).toContain(
+      "鼻尖和面部前向轴必须指向最终画面右边"
+    );
+    expect(personPrompt).toContain(
+      "若最终图仍像图像 1 一样在画面右侧清楚显示人物自身左耳"
+    );
+    expect(productPrompt).not.toContain("人物专用最终屏幕方向判据");
+    expect(productPrompt).not.toMatch(/右耳|左耳|鼻尖|面部前向轴/);
+  });
+
+  it("builds one unmasked Image 2 edit with the source, pose guide, and full camera view", async () => {
     const request = validateSingleImageViewpointRequest(createRequest());
     const sourceBytes = new Uint8Array([1, 2, 3]);
     const guideBytes = new Uint8Array([4, 5, 6]);
+    const cameraBytes = new Uint8Array([7, 8, 9]);
     const form = buildSingleImageEditForm({
       request,
-      analysis,
       sourceImage: {
         mimeType: "image/jpeg",
         bytes: sourceBytes
@@ -216,60 +466,21 @@ describe("single-image viewpoint service", () => {
       poseGuideImage: {
         mimeType: "image/png",
         bytes: guideBytes
+      },
+      cameraPoseImage: {
+        mimeType: "image/png",
+        bytes: cameraBytes
       }
     });
     const images = form.getAll("image[]") as File[];
+    const prompt = String(form.get("prompt"));
 
     expect(form.get("model")).toBe("gpt-image-2");
     expect(form.get("size")).toBe("2048x1152");
     expect(form.get("quality")).toBe("high");
+    expect(form.get("input_fidelity")).toBe("high");
     expect(form.has("mask")).toBe(false);
-    const prompt = String(form.get("prompt"));
-    expect(prompt).toContain(
-      "【锁定相机协议｜服务端确定性生成，禁止改写】"
-    );
-    expect(prompt).toContain(
-      "离散目标视角：基准右侧机位 + 高角度观察 + 特写"
-    );
-    expect(prompt).toContain(
-      "前网罩在屏幕水平方向的投影显著收窄"
-    );
-    expect(prompt).toContain(
-      "远侧支架被前网罩和近侧支架合理遮挡"
-    );
-    expect(prompt).not.toContain("主体右侧表面");
-    expect(prompt).not.toContain("主体左侧表面");
-    expect(prompt).not.toContain("右侧表面需要补全");
-    expect(prompt).not.toContain("将相机改成左侧面 90°");
-    expect(prompt).toContain("高机位向下观察透视");
-    expect(prompt).toContain("逆时针滚转");
-    expect(prompt).toContain("保持同一主体的类别、身份、结构、材质和标记");
-    expect(prompt).toContain("保持同一片日落海滩");
-    expect(prompt).not.toContain(analysis.optimizedPrompt);
-    expect(prompt).not.toContain(analysis.targetViewDescription);
-    expect(prompt).not.toContain(analysis.relativeCameraMotion);
-    expect(prompt).not.toContain(analysis.visibilityConstraints[1]!);
-    expect(prompt).not.toContain(analysis.visibilityConstraints[2]!);
-    expect(prompt).toContain("图像 2 只提供目标相机投影");
-    expect(prompt).not.toContain("图像 3");
-    expect(prompt).not.toMatch(/人体|解剖|脸颊|耳朵|下颌|肩部|鼻孔/);
-    expect(prompt).not.toMatch(/禁止人物主动转身|禁止物体主动旋转自身|人物模板/);
-    expect(prompt).not.toContain("主体主动配合转身");
-    expect(prompt).not.toContain("禁止让主体主动改变姿态、朝向");
-    expect(prompt).not.toContain(
-      "Do not change the subject's pose or orientation."
-    );
-    expect(prompt).toContain(
-      "把物体的零件装配与工作状态作为三维连续参考"
-    );
-    expect(prompt).toContain(
-      "整体相对屏幕的朝向、轮廓、可见部件与遮挡必须按目标机位重建"
-    );
-    expect(prompt).toContain(
-      "原图正向投影可变为侧向或后向投影"
-    );
-    expect(prompt).not.toContain(analysis.hiddenSurfacePlan[1]!);
-    expect(images).toHaveLength(2);
+    expect(images).toHaveLength(3);
     expect(images[0]).toMatchObject({
       name: "source.jpg",
       type: "image/jpeg"
@@ -278,57 +489,117 @@ describe("single-image viewpoint service", () => {
       name: "pose-guide.png",
       type: "image/png"
     });
+    expect(images[2]).toMatchObject({
+      name: "camera-pose.png",
+      type: "image/png"
+    });
     expect(new Uint8Array(await images[0]!.arrayBuffer())).toEqual(sourceBytes);
     expect(new Uint8Array(await images[1]!.arrayBuffer())).toEqual(guideBytes);
+    expect(new Uint8Array(await images[2]!.arrayBuffer())).toEqual(cameraBytes);
+    expect(prompt).toContain(
+      "[Single highest-priority task | camera viewpoint recapture]"
+    );
+    expect(prompt).toContain(
+      "recapture the complete fixed 3D scene through the new view frustum"
+    );
+    expect(prompt).toContain(
+      "a frozen source background"
+    );
+    expect(prompt).not.toContain(legacyAnalysis.optimizedPrompt);
+    expect(prompt).not.toContain(legacyAnalysis.visibilityConstraints[0]!);
+    expect(prompt).not.toMatch(/耳朵|下颌|肩部/);
   });
 
-  it("keeps category-specific projection criteria and drops camera redefinitions", () => {
-    expect(
-      sanitizeProjectionAcceptanceCriteria(
-        [
-          "前网罩投影宽度显著收窄，电机壳厚度清晰可见。",
-          "主体右侧表面必须显示。",
-          "相机改成左侧面 90°。",
-          "补全人物耳朵和下颌线。"
-        ],
-        "product_object"
-      )
-    ).toEqual([
-      "前网罩投影宽度显著收窄，电机壳厚度清晰可见。"
-    ]);
+  it("normalizes an upstream landscape image to the locked square output", async () => {
+    const landscape = await sharp({
+      create: {
+        width: 400,
+        height: 300,
+        channels: 3,
+        background: { r: 80, g: 120, b: 160 }
+      }
+    })
+      .png()
+      .toBuffer();
+    const normalized = await normalizeSingleImageRenderedImage(
+      {
+        image: `data:image/png;base64,${landscape.toString("base64")}`,
+        mimeType: "image/png"
+      },
+      "1024x1024"
+    );
+    const metadata = await sharp(
+      Buffer.from(normalized.image.split(",")[1]!, "base64")
+    ).metadata();
 
-    expect(
-      sanitizeProjectionAcceptanceCriteria(
-        [
-          "只清楚显示一只眼睛，远侧眼睛被鼻梁遮挡，鼻唇下巴形成侧向剪影。",
-          "把视角改成正面。"
-        ],
-        "person"
-      )
-    ).toEqual([
-      "只清楚显示一只眼睛，远侧眼睛被鼻梁遮挡，鼻唇下巴形成侧向剪影。"
-    ]);
+    expect(normalized.mimeType).toBe("image/png");
+    expect(metadata.width).toBe(1024);
+    expect(metadata.height).toBe(1024);
   });
 
-  it("parses structured analysis and supported image response shapes", () => {
+  it("blocks legacy surface templates and source-projection locks", () => {
+    expect(() =>
+      assertSingleImageRenderPromptSafety("主体右侧表面必须显露。")
+    ).toThrowError(
+      expect.objectContaining({
+        code: "SINGLE_VIEW_RENDER_PROMPT_CONFLICT"
+      })
+    );
+    expect(() =>
+      assertSingleImageRenderPromptSafety(
+        "Do not change the subject's pose or orientation."
+      )
+    ).toThrowError(
+      expect.objectContaining({
+        code: "SINGLE_VIEW_RENDER_PROMPT_CONFLICT"
+      })
+    );
+    expect(() =>
+      assertSingleImageRenderPromptSafety(
+        "目标新视锥决定整幅场景的透视、视差、遮挡和构图。"
+      )
+    ).not.toThrow();
+  });
+
+  it("parses bilingual reasoning and keeps the legacy parser compatible", () => {
+    expect(
+      parseSingleImageBilingualReasoningResponse({
+        output_text: JSON.stringify({
+          subject_category: "product_object",
+          zh: localizedReasoningPayload(analyzedChinese),
+          en: localizedReasoningPayload(analyzedEnglish)
+        })
+      })
+    ).toMatchObject({
+      subjectCategory: "product_object",
+      zh: {
+        optimizedPrompt: analyzedChinese.optimizedPrompt,
+        identityConstraints: analyzedChinese.identityConstraints
+      },
+      en: {
+        optimizedPrompt: analyzedEnglish.optimizedPrompt,
+        identityConstraints: analyzedEnglish.identityConstraints
+      }
+    });
+
     expect(
       parseSingleImageReasoningResponse({
         output_text: JSON.stringify({
-          subject_category: analysis.subjectCategory,
-          optimized_prompt: analysis.optimizedPrompt,
-          view_description: analysis.viewDescription,
-          source_view_description: analysis.sourceViewDescription,
-          target_view_description: analysis.targetViewDescription,
-          relative_camera_motion: analysis.relativeCameraMotion,
-          visibility_constraints: analysis.visibilityConstraints,
-          occlusion_constraints: analysis.occlusionConstraints,
-          identity_constraints: analysis.identityConstraints,
-          hidden_surface_plan: analysis.hiddenSurfacePlan,
-          scene_plan: analysis.scenePlan,
-          uncertainty_notes: analysis.uncertaintyNotes
+          subject_category: legacyAnalysis.subjectCategory,
+          optimized_prompt: legacyAnalysis.optimizedPrompt,
+          view_description: legacyAnalysis.viewDescription,
+          source_view_description: legacyAnalysis.sourceViewDescription,
+          target_view_description: legacyAnalysis.targetViewDescription,
+          relative_camera_motion: legacyAnalysis.relativeCameraMotion,
+          visibility_constraints: legacyAnalysis.visibilityConstraints,
+          occlusion_constraints: legacyAnalysis.occlusionConstraints,
+          identity_constraints: legacyAnalysis.identityConstraints,
+          hidden_surface_plan: legacyAnalysis.hiddenSurfacePlan,
+          scene_plan: legacyAnalysis.scenePlan,
+          uncertainty_notes: legacyAnalysis.uncertaintyNotes
         })
       })
-    ).toEqual(analysis);
+    ).toEqual(legacyAnalysis);
 
     expect(
       parseSingleImageEditResponse({
@@ -340,7 +611,7 @@ describe("single-image viewpoint service", () => {
     });
   });
 
-  it("resolves Responses and image edit endpoints", () => {
+  it("resolves the Responses and image-edit endpoints", () => {
     expect(
       resolveSingleImageViewpointEndpoints(createRequest().endpoint_override)
     ).toEqual({
@@ -349,3 +620,18 @@ describe("single-image viewpoint service", () => {
     });
   });
 });
+
+function localizedReasoningPayload(
+  analysis: SingleImageViewpointAnalysis
+) {
+  return {
+    optimized_prompt: analysis.optimizedPrompt,
+    source_view_description: analysis.sourceViewDescription,
+    visibility_constraints: analysis.visibilityConstraints,
+    occlusion_constraints: analysis.occlusionConstraints,
+    identity_constraints: analysis.identityConstraints,
+    hidden_surface_plan: analysis.hiddenSurfacePlan,
+    scene_plan: analysis.scenePlan,
+    uncertainty_notes: analysis.uncertaintyNotes
+  };
+}

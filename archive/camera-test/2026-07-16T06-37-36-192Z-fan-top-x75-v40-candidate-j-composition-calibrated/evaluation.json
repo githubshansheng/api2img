@@ -1,0 +1,18 @@
+{
+  "status": "near-pass",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.35,
+    "subjectHeightRatioApprox": 0.42,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": false,
+    "identityGeometryPass": false
+  },
+  "reason": "The calibrated close framing nearly reached the medium-shot threshold and retained the elevated-camera projection, but the subject remained below 45% and the support neck elongated."
+}

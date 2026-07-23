@@ -1,0 +1,12 @@
+{
+  "status": "upstream-timeout",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "httpStatus": 524,
+  "retryable": true,
+  "reason": "The upstream image service exceeded the Cloudflare 120-second proxy read timeout. No result image was returned."
+}

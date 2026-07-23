@@ -3,6 +3,8 @@ export type LangCode = "zh-CN" | "en-US" | "zh-TW" | "ru-RU";
 export type PageKey =
   | "studio"
   | "editing"
+  | "viewpoint"
+  | "outpaint"
   | "generation"
   | "compare"
   | "history"

@@ -1,0 +1,35 @@
+{
+  "requestId": "f4f0fc45-07e8-43d6-b39a-b5d0a4629117",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 1231188,
+    "sha256": "d1536d7184fb509bff38a4e9c56c4be075cce2d750ef5b63fa259f239190f39d"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 1705064,
+    "sha256": "82cd8c43ba61c9e91fb556c6e658fe21dcae1bbae57042b79a7c6e6469dc51b7"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 1774084,
+    "sha256": "bebc4b34c818eba28e179bcab5657807b54ad0b917119a8798cc51efc2b4c1e4"
+  },
+  "rotation_degrees": {
+    "x": 75,
+    "y": 0,
+    "z": 0
+  },
+  "camera_distance": 10,
+  "user_prompt": "保持同一主体身份或型号、同一现实瞬间的动作或装配关系、材质、光线与原始场景。目标相机机位唯一决定最终屏幕朝向、轮廓、投影宽度、可见结构、遮挡与背景视差；先移动相机到锁定机位，再从该机位重新生成整幅画面。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\archive\\camera-test\\protocol-lab\\fan-medium-source-crop.png"
+}

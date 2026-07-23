@@ -1,0 +1,12 @@
+{
+  "draft": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png",
+  "source": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\en-negative-yaw-control\\pose-guide.png",
+  "guide": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\en-negative-yaw-control\\camera-pose.png",
+  "direction": "right",
+  "promptMode": "user-zh-left",
+  "model": "gpt-image-2",
+  "endpoint": "https://ai.heigh.vip/v1/images/edits",
+  "inputFidelity": "high",
+  "size": "2048x2048",
+  "durationMs": 105984
+}

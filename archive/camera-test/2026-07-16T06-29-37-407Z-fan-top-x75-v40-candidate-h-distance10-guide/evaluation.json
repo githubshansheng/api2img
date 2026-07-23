@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.55,
+    "subjectHeightRatioApprox": 0.31,
+    "fanHeadFacesCamera": true,
+    "cameraProjectionPass": false,
+    "compositionPass": false,
+    "identityGeometryPass": true
+  },
+  "reason": "The annotated distance-10 camera diagram did not enforce the desired projection; the head compensated toward the camera and the full-scene framing remained dominant."
+}

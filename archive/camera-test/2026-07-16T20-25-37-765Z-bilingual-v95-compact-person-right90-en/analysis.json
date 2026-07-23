@@ -1,0 +1,42 @@
+{
+  "subjectCategory": "person",
+  "optimizedPrompt": "Photorealistic soft-light portrait of a young East Asian woman with fair skin, gray-brown eyes, dark brown-black hair in a loose bun, wisps across the forehead and neck, delicate features, pale orange eye makeup, natural pink lips, and a white finely textured square-neck top. The new projection shows a clear facial contour with realistic overlap among the nose bridge, tip, lips, and jaw. Preserve natural window light, shallow depth of field, a beige-gray interior, and softly blurred wooden furniture.",
+  "viewDescription": "Photorealistic soft-light portrait of a young East Asian woman with fair skin, gray-brown eyes, dark brown-black hair in a loose bun, wisps across the forehead and neck, delicate features, pale orange eye makeup, natural pink lips, and a white finely textured square-neck top. The new projection shows a clear facial contour with realistic overlap among the nose bridge, tip, lips, and jaw. Preserve natural window light, shallow depth of field, a beige-gray interior, and softly blurred wooden furniture.",
+  "sourceViewDescription": "A close photorealistic portrait of a young East Asian woman clearly showing a dark loose bun, gray-brown eyes, natural makeup, and a white finely textured square-neck top; soft window light illuminates her face against a strongly blurred interior.",
+  "targetViewDescription": "strict right-side view, eye level, medium shot, roll 0 degrees with the source horizon as the zero-roll reference",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "The nose bridge, nose tip, upper and lower lips, and jawline form a continuous, clearly defined facial outline.",
+    "The nearer eyebrow, eye, cheekbone, ear, and hairline become more fully visible while the other eye is strongly foreshortened.",
+    "The loose bun, softly raised crown volume, and wispy neck hairs remain recognizable as layered structures.",
+    "The white square neckline, collarbones, and shoulders remain present, while the chest width is strongly compressed in projection."
+  ],
+  "occlusionConstraints": [
+    "The nose bridge and tip occlude the farther eye area and part of the cheek, leaving the farther brow and eye minimally visible or hidden.",
+    "The nearer cheek contour and loose strands partially overlap the ear, while hair behind the ear continues to cover part of the neck.",
+    "The bun overlaps the rear head hair, revealing only the visible outer layers of its wrapped structure.",
+    "The nearer shoulder and neckline edge occlude the farther shoulder, compressing the apparent torso width."
+  ],
+  "identityConstraints": [
+    "Preserve the young East Asian woman’s soft oval face, fine straight brows, gray-brown eyes, slender nose, and natural pink lips.",
+    "Preserve the dark brown-black hair, loose high bun, long forehead wisps, and fine strands along the neck.",
+    "Preserve fair skin, fine natural skin texture, pale orange eye makeup, and restrained photorealistic retouching.",
+    "Preserve the white lightweight finely textured square-neck top without adding jewelry, text, or accessories."
+  ],
+  "hiddenSurfacePlan": [
+    "Extend the visible nose structure into a restrained bridge and nostril shape without exaggerating unseen contours.",
+    "Complete the rear head and bun volume from the visible hair mass, keeping internal wrapping details conservative.",
+    "Complete the farther brow, eye, cheek, and ear only where they are not naturally occluded.",
+    "Extend unseen clothing with the same white finely textured fabric and square-neck construction, adding no patterns."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean, allowing only a few softly blurred loose hairs near the image edge.",
+    "Use the head, neck, shoulders, and white top as the midground, retaining shallow-depth separation.",
+    "Continue the beige-gray wall, bright window-side area, and distant wooden furniture as softly blurred background layers.",
+    "Keep the floor outside the visible area and fill uncovered space with a text-free interior blur containing no new objects."
+  ],
+  "uncertaintyNotes": [
+    "The exact wrapping on the back of the bun is unseen and should be completed conservatively with a loose natural silhouette.",
+    "Visibility of the farther ear and shoulder should follow real occlusion rather than being forced into view."
+  ]
+}

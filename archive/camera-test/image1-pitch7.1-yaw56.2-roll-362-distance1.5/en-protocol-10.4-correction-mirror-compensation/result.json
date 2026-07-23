@@ -1,0 +1,10 @@
+{
+  "draft": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\en-protocol-10.4\\result.png",
+  "source": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png",
+  "guide": "L:\\AIProject\\api2Image\\archive\\camera-test\\image1-pitch7.1-yaw56.2-roll-362-distance1.5\\depth-proxy-guide-negative-yaw.png",
+  "direction": "left",
+  "model": "gpt-image-2",
+  "endpoint": "https://ai.heigh.vip/v1/images/edits",
+  "size": "2048x2048",
+  "durationMs": 121436
+}

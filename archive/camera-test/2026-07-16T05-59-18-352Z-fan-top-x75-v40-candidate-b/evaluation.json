@@ -1,0 +1,23 @@
+{
+  "protocol": "4.0-candidate-b",
+  "passed": false,
+  "target": {
+    "grilleMinorMajorRatio": [0.2, 0.35],
+    "subjectHeightRatio": [0.45, 0.55]
+  },
+  "observedApprox": {
+    "grilleMinorMajorRatio": 0.28,
+    "subjectHeightRatio": 0.3
+  },
+  "checks": {
+    "cameraElevationChanged": true,
+    "fanHeadStayedWorldLocked": true,
+    "grilleForeshorteningPassed": true,
+    "mediumShotScalePassed": false
+  },
+  "findings": [
+    "The high camera viewpoint and world-locked fan orientation are now visually correct.",
+    "The grille became the required strongly foreshortened horizontal ellipse.",
+    "The fan remains too small for the requested medium-shot framing."
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "code": "SINGLE_VIEW_RENDER_PROMPT_CONFLICT",
+  "message": "最终提示词包含会锁定原图二维朝向的冲突约束，已在发送给图像模型前阻断。",
+  "requestId": "e4800816-6ae3-49fc-b5a5-cfb102c46957",
+  "retryable": false
+}

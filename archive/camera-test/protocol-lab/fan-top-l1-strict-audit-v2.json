@@ -1,0 +1,59 @@
+{
+  "createdAt": "2026-07-16T10:28:00.255Z",
+  "model": "gpt-5.6-sol",
+  "status": 200,
+  "durationMs": 35959,
+  "view": "top",
+  "inputs": [
+    {
+      "id": "source",
+      "label": "原始正前方事实图",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\protocol-lab\\fan-medium-source-crop.png"
+    },
+    {
+      "id": "side",
+      "label": "严格右侧结构证据",
+      "path": "L:\\AIProject\\api2img\\archive\\camera-test\\2026-07-16-fan-side-right-90-v39\\result.png"
+    },
+    {
+      "id": "candidate",
+      "label": "俯视 +75°候选",
+      "path": "L:\\AIProject\\api2Image\\archive\\camera-test\\2026-07-16T06-44-00-001Z-fan-top-x75-v40-candidate-l1-calibrated-retry\\result.png"
+    }
+  ],
+  "audit": {
+    "view": "候选图呈产品正前上方高机位俯视，接近 Yaw 0°、Pitch +75°、Roll 0°",
+    "grille_ratio_estimate": 0.22,
+    "grille_projection_score": 4,
+    "motor_axis_score": 4,
+    "support_connection_score": 3,
+    "camera_parallax_score": 4,
+    "roll_zero_score": 4,
+    "active_head_tilt_detected": false,
+    "assembly_break_detected": false,
+    "strict_pass": true,
+    "visible_evidence": [
+      "圆形网罩投影为横向窄椭圆，外轮廓短轴约为长轴的 0.22，位于 0.20 到 0.35 的严格区间内。",
+      "白色后置电机壳的上部轮廓投影在网罩中心上方，符合水平电机轴沿后方深度方向产生的向上屏幕位移。",
+      "支撑颈保持竖直，并从中央轮毂后下方的遮挡区域连续向下进入底座，未见分离缝隙或错位断口。",
+      "圆形底座显示大面积顶面且保持水平，桌面、左侧果盘、右侧玻璃杯和背景柜体均呈明显高机位俯视关系。",
+      "网罩长轴、桌面后缘及背景柜体横向边线基本保持水平，没有可见画面滚转。"
+    ],
+    "defects": [
+      "后置电机壳下部与支撑颈顶部的实际接合段被网罩中央区域遮挡，连接关系虽连续但不能完整直接观察，因此支撑连接项仅评为 3。"
+    ],
+    "verdict": "严格通过：五项评分均不低于 3，网罩压缩比符合目标俯视角，未发现机头主动俯仰、装配断裂或 Roll 错误。"
+  },
+  "usage": {
+    "input_tokens": 5676,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 0
+    },
+    "output_tokens": 1322,
+    "output_tokens_details": {
+      "reasoning_tokens": 896
+    },
+    "total_tokens": 6998
+  }
+}

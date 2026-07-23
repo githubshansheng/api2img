@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.34,
+    "subjectHeightRatioApprox": 0.34,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": false,
+    "identityGeometryPass": true
+  },
+  "reason": "The clean close camera guide retained the elevated-camera projection and product identity, but Image 2 still underfilled the requested 45%-55% medium framing."
+}

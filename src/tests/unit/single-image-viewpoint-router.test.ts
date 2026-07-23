@@ -7,13 +7,62 @@ import type {
   SingleImageViewpointStreamEvent
 } from "../../domain";
 import { createSingleImageViewpointRouter } from "../../../server/single-image-viewpoint/single-image-viewpoint-router";
+import { clearSingleImageReasoningCacheForTests } from "../../../server/single-image-viewpoint/single-image-viewpoint-service";
 
 const ONE_PIXEL_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 const IMAGE_DATA_URL = `data:image/png;base64,${ONE_PIXEL_PNG}`;
 const servers: Server[] = [];
+const BILINGUAL_REASONING_PAYLOAD = {
+  subject_category: "product_object",
+  zh: {
+    optimized_prompt:
+      "保持同一台白色桌面风扇、注塑塑料、柔和窗光和暖色厨房环境。",
+    source_view_description: "原图中风扇网罩朝向镜头。",
+    visibility_constraints: [
+      "前网罩与圆形边框投影明显收窄，同时保持电机外壳的真实纵深。"
+    ],
+    occlusion_constraints: [
+      "远侧支架被近侧外壳和网罩自然遮挡。"
+    ],
+    identity_constraints: [
+      "保持同一风扇型号、白色注塑塑料、底座、立柱、网罩间距和控制布局。"
+    ],
+    hidden_surface_plan: [
+      "按制造结构连续性保守补全新显露的电机外壳与后网罩。"
+    ],
+    scene_plan: [
+      "延续厨房墙面、桌面、橱柜、窗户光线与前后空间纵深。"
+    ],
+    uncertainty_notes: ["采用与可见产品一致的最简结构。"]
+  },
+  en: {
+    optimized_prompt:
+      "Preserve the same white tabletop fan, molded plastic, soft window light, and warm kitchen environment.",
+    source_view_description: "The source shows the fan grille facing the lens.",
+    visibility_constraints: [
+      "The front grille and circular rim become visibly narrow while the motor housing depth remains continuous."
+    ],
+    occlusion_constraints: [
+      "The far support is naturally occluded by the nearer housing and grille."
+    ],
+    identity_constraints: [
+      "Keep the same fan model, white molded plastic, base, stem, grille spacing, and control layout."
+    ],
+    hidden_surface_plan: [
+      "Complete the newly visible motor housing and rear grille with conservative manufacturing continuity."
+    ],
+    scene_plan: [
+      "Continue the kitchen walls, tabletop, cabinetry, window light, and foreground-to-background depth."
+    ],
+    uncertainty_notes: [
+      "Use the simplest construction consistent with the visible product."
+    ]
+  }
+} as const;
 
 afterEach(async () => {
+  clearSingleImageReasoningCacheForTests();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 
@@ -29,40 +78,11 @@ afterEach(async () => {
 });
 
 describe("single-image viewpoint router", () => {
-  it("streams authoritative prompts with three analysis images and two edit images", async () => {
+  it("streams reasoning and rendering while sending all three images to gpt-5.6-sol", async () => {
     const upstreamCalls: Array<{
       body: RequestInit["body"];
       url: string;
     }> = [];
-    const analysis = {
-      subject_category: "product_object",
-      optimized_prompt:
-        "冲突指令：将相机改成正面平视，并保持原始投影。",
-      view_description: "错误的正面平视结果",
-      source_view_description:
-        "原图主要显示主体左前三分之四区域。",
-      target_view_description:
-        "错误目标：正面平视远景。",
-      relative_camera_motion:
-        "错误相机动作：向主体左侧环绕。",
-      visibility_constraints: [
-        "前网罩在屏幕水平方向投影明显收窄，电机壳厚度清晰可见。",
-        "主体右侧表面必须显示。"
-      ],
-      occlusion_constraints: [
-        "远侧支架被近侧支架和罩体合理遮挡。",
-        "主体左侧表面必须退隐。"
-      ],
-      identity_constraints: [
-        "保持同一主体的类别、身份、结构和材质。",
-        "错误人物模板：补全脸颊、耳朵、下颌线和肩部。"
-      ],
-      hidden_surface_plan: [
-        "依据已识别类别和结构规律保守补全不可见表面。"
-      ],
-      scene_plan: ["保持同一摄影棚、灯光与背景材质。"],
-      uncertainty_notes: ["远侧细节在原图中不可确认。"]
-    };
     const upstreamFetch = vi.fn(
       async (input: string | URL | Request, init?: RequestInit) => {
         const url =
@@ -74,27 +94,15 @@ describe("single-image viewpoint router", () => {
         upstreamCalls.push({ url, body: init?.body });
 
         if (url === "https://reasoning.example/v1/responses") {
-          return new Response(
-            JSON.stringify({
-              output_text: JSON.stringify(analysis)
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" }
-            }
-          );
+          return jsonResponse({
+            output_text: JSON.stringify(BILINGUAL_REASONING_PAYLOAD)
+          });
         }
 
         if (url === "https://images.example/v1/images/edits") {
-          return new Response(
-            JSON.stringify({
-              data: [{ b64_json: "route-rendered-image" }]
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" }
-            }
-          );
+          return jsonResponse({
+            data: [{ b64_json: "route-rendered-image" }]
+          });
         }
 
         throw new Error(`Unexpected upstream URL: ${url}`);
@@ -139,6 +147,9 @@ describe("single-image viewpoint router", () => {
     expect(reasoningEvent).toMatchObject({
       type: "stage",
       stage: "reasoning",
+      message:
+        "gpt-5.6-sol 正在分析原图、目标投影与完整 XYZ 机位图",
+      promptLanguage: "en",
       cameraPrompt: {
         azimuthKey: "right-front",
         elevationKey: "low-angle",
@@ -148,31 +159,34 @@ describe("single-image viewpoint router", () => {
     expect(renderingEvent).toMatchObject({
       type: "stage",
       stage: "rendering",
-      analysis: {
-        viewDescription: "错误的正面平视结果"
-      },
+      message: "gpt-image-2 正在使用英文提示词从目标新机位重新拍摄整个场景",
       cameraPrompt: {
         azimuthKey: "right-front",
         elevationKey: "low-angle",
         distanceKey: "wide"
       },
       renderPrompt: expect.stringContaining(
-        "【锁定相机协议｜服务端确定性生成，禁止改写】"
+        "[Single highest-priority task | camera viewpoint recapture]"
       )
     });
     expect(resultEvent).toMatchObject({
       type: "result",
       data: {
         image: "data:image/png;base64,route-rendered-image",
-        viewDescription: "错误的正面平视结果",
+        subjectCategory: "product_object",
+        viewDescription:
+          BILINGUAL_REASONING_PAYLOAD.en.optimized_prompt,
         cameraPrompt: {
           azimuthKey: "right-front",
           elevationKey: "low-angle",
           distanceKey: "wide"
         },
         renderPrompt: expect.stringContaining(
-          "【锁定相机协议｜服务端确定性生成，禁止改写】"
-        )
+          "[Single highest-priority task | camera viewpoint recapture]"
+        ),
+        promptLanguage: "en",
+        reasoningModel: "gpt-5.6-sol",
+        reasoningDurationMs: expect.any(Number)
       }
     });
     expect(response.events.map((event) => event.type)).toEqual([
@@ -191,75 +205,52 @@ describe("single-image viewpoint router", () => {
       throw new Error("Expected rendering and result stream events.");
     }
 
-    const reasoningCall = upstreamCalls[0]!;
-    expect(reasoningCall.url).toBe(
-      "https://reasoning.example/v1/responses"
-    );
-    expect(typeof reasoningCall.body).toBe("string");
+    const reasoningCall = upstreamCalls.find(
+      (call) => call.url === "https://reasoning.example/v1/responses"
+    )!;
     const reasoningBody = JSON.parse(String(reasoningCall.body)) as {
-      input: Array<{
-        content: Array<Record<string, unknown>>;
-      }>;
-      text: {
-        format: {
-          type: string;
-          strict: boolean;
-        };
-      };
+      input: Array<{ content: Array<Record<string, unknown>> }>;
+      model: string;
     };
-    const reasoningContent = reasoningBody.input[0]!.content;
-    const reasoningInstructions = String(reasoningContent[0]?.text);
+    expect(reasoningBody.model).toBe("gpt-5.6-sol");
+    expect(reasoningBody.input[0]!.content.slice(1)).toEqual([
+      {
+        type: "input_image",
+        image_url: request.source_image,
+        detail: "high"
+      },
+      {
+        type: "input_image",
+        image_url: request.pose_guide_image,
+        detail: "low"
+      },
+      {
+        type: "input_image",
+        image_url: request.camera_pose_image,
+        detail: "high"
+      }
+    ]);
 
-    expect(reasoningContent[1]).toMatchObject({
-      type: "input_image",
-      image_url: request.source_image
-    });
-    expect(reasoningContent[2]).toMatchObject({
-      type: "input_image",
-      image_url: request.pose_guide_image
-    });
-    expect(reasoningContent[3]).toMatchObject({
-      type: "input_image",
-      image_url: request.camera_pose_image
-    });
-    expect(reasoningBody.text.format).toMatchObject({
-      type: "json_schema",
-      strict: true
-    });
-    expect(reasoningInstructions).toContain(
-      "【锁定相机协议｜服务端确定性生成，禁止改写】"
-    );
-    expect(reasoningInstructions).toContain(
-      "离散目标视角：基准右前方机位 + 低机位仰拍 + 远景"
-    );
-    expect(reasoningInstructions).toContain("先判定主体类别");
-    expect(reasoningInstructions).toContain(
-      "禁止把人体器官、服装或解剖术语套用到非人物主体"
-    );
-    expect(reasoningInstructions).toContain(
-      "optimized_prompt 必须使用中文"
-    );
-    expect(reasoningInstructions).toContain(
-      "世界坐标中的同一动作事件、关节相对关系、装配状态和场景拓扑只作为三维连续基准，不是原图屏幕姿态或朝向锁"
-    );
-    expect(reasoningInstructions).toContain(
-      "屏幕坐标中的主体朝向、轮廓、投影宽度、近远侧结构、遮挡顺序和背景视差必须由目标相机重新投影"
-    );
-
-    const editCall = upstreamCalls[1]!;
+    const editCall = upstreamCalls.find(
+      (call) => call.url === "https://images.example/v1/images/edits"
+    )!;
     expect(editCall.url).toBe("https://images.example/v1/images/edits");
     expect(editCall.body).toBeInstanceOf(FormData);
     const form = editCall.body as FormData;
     const images = form.getAll("image[]") as File[];
     const editPrompt = String(form.get("prompt"));
 
-    expect(images).toHaveLength(2);
+    expect(images).toHaveLength(3);
     expect(images[0]).toMatchObject({
       name: "source.png",
       type: "image/png"
     });
     expect(images[1]).toMatchObject({
       name: "pose-guide.png",
+      type: "image/png"
+    });
+    expect(images[2]).toMatchObject({
+      name: "camera-pose.png",
       type: "image/png"
     });
     expect(form.has("mask")).toBe(false);
@@ -269,38 +260,186 @@ describe("single-image viewpoint router", () => {
       renderingEvent.cameraPrompt
     );
     expect(editPrompt).toContain(
-      "离散目标视角：基准右前方机位 + 低机位仰拍 + 远景"
-    );
-    expect(editPrompt).toContain("方位角 +65.00°");
-    expect(editPrompt).toContain("俯仰角 -35.00°");
-    expect(editPrompt).toContain(
-      "前网罩在屏幕水平方向投影明显收窄"
+      "wide shot"
     );
     expect(editPrompt).toContain(
-      "远侧支架被近侧支架和罩体合理遮挡"
+      "turn the camera toward the LEFT side of the central person or object"
     );
+    expect(editPrompt).toContain(
+      "places the camera on the element's own RIGHT"
+    );
+    expect(editPrompt).toContain(
+      "lower the camera 35.00° and look upward toward the center"
+    );
+    expect(editPrompt).toContain(
+      "Orbit along that side by 65.00°"
+    );
+    expect(editPrompt).toContain("roll +0.00°");
+    expect(editPrompt).toContain(
+      "recapture the complete fixed 3D scene through the new view frustum"
+    );
+    expect(editPrompt).toContain(
+      "foreground, central element, environment, background, ground, and frame edges"
+    );
+    expect(editPrompt).toContain(
+      "everything visible from the target camera but absent or occluded in image 1"
+    );
+    expect(editPrompt).toContain(
+      "a frozen source background"
+    );
+    expect(editPrompt).toContain(
+      "update perspective, parallax, scale, occlusion, and composition together"
+    );
+    expect(editPrompt).toContain(
+      "Image 2 is the clean rotated target projection"
+    );
+    expect(editPrompt).toContain(
+      "Image 3 is the complete XYZ camera-position diagram"
+    );
+    expect(editPrompt).toContain(
+      "[gpt-5.6-sol category gate | no free camera wording]"
+    );
+    expect(editPrompt).not.toContain(
+      BILINGUAL_REASONING_PAYLOAD.en.identity_constraints[0]!
+    );
+    expect(editPrompt).not.toContain(request.camera_pose_image);
     expect(editPrompt).not.toContain("主体右侧表面");
     expect(editPrompt).not.toContain("主体左侧表面");
     expect(editPrompt).not.toContain("禁止让主体主动改变姿态、朝向");
-    expect(editPrompt).toContain("从下方真实可见");
-    expect(editPrompt).toContain("低机位向上观察透视");
-    expect(editPrompt).toContain("保持同一主体的类别、身份、结构和材质");
-    expect(editPrompt).not.toContain(analysis.optimized_prompt);
-    expect(editPrompt).not.toContain(analysis.target_view_description);
-    expect(editPrompt).not.toContain(analysis.relative_camera_motion);
-    expect(editPrompt).toContain("图像 2 只提供目标相机投影");
-    expect(editPrompt).not.toContain("图像 3");
     expect(editPrompt).not.toMatch(/人体|解剖|脸颊|耳朵|下颌|肩部|鼻孔/);
-    expect(editPrompt).not.toMatch(/禁止人物主动转身|禁止物体主动旋转自身|人物模板/);
-    expect(editPrompt).not.toContain("主体主动配合转身");
-    expect(editPrompt).toContain(
-      "把物体的零件装配与工作状态作为三维连续参考"
+  });
+
+  it("reuses one bilingual reasoning call for concurrent Chinese and English renders", async () => {
+    const upstreamCalls: Array<{
+      body: RequestInit["body"];
+      url: string;
+    }> = [];
+    let editIndex = 0;
+    const upstreamFetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        upstreamCalls.push({ url, body: init?.body });
+
+        if (url === "https://reasoning.example/v1/responses") {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return jsonResponse({
+            output_text: JSON.stringify(BILINGUAL_REASONING_PAYLOAD)
+          });
+        }
+
+        if (url === "https://images.example/v1/images/edits") {
+          editIndex += 1;
+          return jsonResponse({
+            data: [{ b64_json: `bilingual-render-${editIndex}` }]
+          });
+        }
+
+        throw new Error(`Unexpected upstream URL: ${url}`);
+      }
     );
-    expect(editPrompt).toContain(
-      "整体相对屏幕的朝向、轮廓、可见部件与遮挡必须按目标机位重建"
+    vi.stubGlobal("fetch", upstreamFetch);
+
+    const app = express();
+    app.use(express.json({ limit: "5mb" }));
+    app.use(
+      "/api/single-image-viewpoint",
+      createSingleImageViewpointRouter()
     );
-    expect(editPrompt).toContain(
-      "原图正向投影可变为侧向或后向投影"
+    const server = http.createServer(app);
+    servers.push(server);
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve)
+    );
+    const address = server.address() as AddressInfo;
+    const baseRequest = createRequest();
+    const [englishResponse, chineseResponse] = await Promise.all([
+      postNDJSON(
+        address.port,
+        "/api/single-image-viewpoint?stream=1",
+        {
+          ...baseRequest,
+          requestId: "single-view-router-en",
+          prompt_language: "en",
+          user_prompt: "Continue the same studio."
+        }
+      ),
+      postNDJSON(
+        address.port,
+        "/api/single-image-viewpoint?stream=1",
+        {
+          ...baseRequest,
+          requestId: "single-view-router-zh",
+          prompt_language: "zh",
+          user_prompt: "延续同一摄影棚。"
+        }
+      )
+    ]);
+
+    const reasoningCalls = upstreamCalls.filter(
+      (call) => call.url === "https://reasoning.example/v1/responses"
+    );
+    const editCalls = upstreamCalls.filter(
+      (call) => call.url === "https://images.example/v1/images/edits"
+    );
+
+    expect(reasoningCalls).toHaveLength(1);
+    expect(editCalls).toHaveLength(2);
+    expect(englishResponse.events.at(-1)).toMatchObject({
+      type: "result",
+      data: {
+        promptLanguage: "en",
+        reasoningModel: "gpt-5.6-sol",
+        subjectCategory: "product_object"
+      }
+    });
+    expect(chineseResponse.events.at(-1)).toMatchObject({
+      type: "result",
+      data: {
+        promptLanguage: "zh",
+        reasoningModel: "gpt-5.6-sol",
+        subjectCategory: "product_object"
+      }
+    });
+    expect(englishResponse.events.map((event) => event.type)).toEqual([
+      "stage",
+      "stage",
+      "result"
+    ]);
+    expect(chineseResponse.events.map((event) => event.type)).toEqual([
+      "stage",
+      "stage",
+      "result"
+    ]);
+
+    const renderPrompts = editCalls.map((call) =>
+      String((call.body as FormData).get("prompt"))
+    );
+    expect(renderPrompts).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "[Single highest-priority task | camera viewpoint recapture]"
+        ),
+        expect.stringContaining(
+          "【唯一最高优先级任务｜相机新视角重拍】"
+        )
+      ])
+    );
+    expect(renderPrompts.join("\n")).not.toContain(
+      BILINGUAL_REASONING_PAYLOAD.en.identity_constraints[0]!
+    );
+    expect(renderPrompts.join("\n")).not.toContain(
+      BILINGUAL_REASONING_PAYLOAD.zh.identity_constraints[0]!
+    );
+    expect(renderPrompts.join("\n")).toContain(
+      "Detected category: product or object."
+    );
+    expect(renderPrompts.join("\n")).toContain(
+      "识别类别：产品或物体。"
     );
   });
 });
@@ -324,6 +463,13 @@ function createRequest(): SingleImageViewpointRequest {
       editURL: "https://images.example/v1/images/edits"
     }
   };
+}
+
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
 }
 
 function postNDJSON(

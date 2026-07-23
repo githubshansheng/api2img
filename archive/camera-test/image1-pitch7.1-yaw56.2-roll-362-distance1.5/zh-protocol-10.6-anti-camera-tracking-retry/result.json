@@ -1,0 +1,134 @@
+{
+  "requestId": "5a481ada-408b-4327-b827-0307375faa35",
+  "image": {
+    "mediaType": "image/png",
+    "base64Length": 9172096,
+    "sha256": "3b83452642ca814fddbed7e53ca2d81bc2e8194d46401c3621f787ba551e12e3"
+  },
+  "imageMimeType": "image/png",
+  "pose": {
+    "cumulativeDegrees": {
+      "x": 7.1,
+      "y": 56.2,
+      "z": -362
+    },
+    "normalizedDegrees": {
+      "x": 7.1,
+      "y": 56.2,
+      "z": -2
+    },
+    "quaternion": {
+      "x": 0.06281709953083059,
+      "y": -0.4690832110865029,
+      "z": 0.013794707902433822,
+      "w": 0.8808090934573709
+    },
+    "eulerOrder": "YXZ",
+    "coordinateSystem": "right-handed-camera-orbit"
+  },
+  "cameraPrompt": {
+    "cumulativeRotationDegrees": {
+      "x": 7.1,
+      "y": 56.2,
+      "z": -362
+    },
+    "equivalentRotationDegrees": {
+      "x": 7.1,
+      "y": 56.2,
+      "z": -2
+    },
+    "cameraAzimuthDegrees": 56.2,
+    "cameraElevationDegrees": 7.1,
+    "cameraRollDegrees": -2,
+    "cameraDistance": 1.5,
+    "azimuthKey": "right-front",
+    "elevationKey": "eye-level",
+    "distanceKey": "wide",
+    "azimuthLabelZh": "对象右前方机位（原图观看者左侧轨道）",
+    "azimuthLabelEn": "object-right-front three-quarter view on the source viewer's left orbit",
+    "elevationLabelZh": "平视",
+    "elevationLabelEn": "eye level",
+    "distanceLabelZh": "远景",
+    "distanceLabelEn": "wide shot",
+    "rollLabelZh": "Roll 累计控制值 -362.00°，等效为 -2.00°，整幅画框相对原图逆时针滚转 2.00°",
+    "rollLabelEn": "the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source",
+    "viewerOrbitDirectionZh": "原图观看者左侧",
+    "viewerOrbitDirectionEn": "the source viewer's left",
+    "objectOrbitDirectionZh": "被摄对象自身右侧",
+    "objectOrbitDirectionEn": "the depicted object's own right",
+    "sourceAspectRatioLabel": "1:1",
+    "outputSize": "2048x2048",
+    "requiredVisibleSurfaces": [
+      "目标画面必须来自锁定机位的新视锥；前景、关注对象、中景、背景、地面、环境物体和画面边界必须一起重新成像。",
+      "原图未拍到但会进入目标新视锥的对象结构与环境区域，依据原图的空间、材质、光线、色彩和画风合理想象并自然补全。"
+    ],
+    "requiredOccludedSurfaces": [
+      "所有近远遮挡、入画、出画和重新显露关系必须按目标相机位置重新计算，不得沿用源图的二维遮挡顺序。",
+      "目标机位看不到的源图区域可以自然退隐或离开画面，不得为了保留原构图而复制、镜像或贴回。"
+    ],
+    "perspectiveConstraints": [
+      "整幅画面的透视、视差、地平线、构图、轮廓和尺度必须共同证明相机已沿轨道移动到目标机位。",
+      "相机以固定的场景关注点为轨道圆心，镜头光轴在移动过程中持续指向同一关注点；这是环绕拍摄，不是横向平移，也不是让画面中的某个对象代替相机转动。",
+      "相机沿原图观看者左侧轨道移动，到达被摄对象自身右前方的三分之四机位；所有深度层必须出现与该水平机位一致的视差和遮挡变化。",
+      "前侧三分之四机位验收：源图中朝向镜头的主要投影必须出现明确的横向透视缩短，并与环境各深度层的视差变化一致，不得继续保持零度正面投影。",
+      "保持平视对应的自然透视，不得加入与目标俯仰矛盾的顶视或底视特征。",
+      "远景：相机真实后移并扩大环境视野，补全新进入画面的空间；不得只把源图内容二维缩小。",
+      "相机画框绕光轴逆时针滚转 2.00°；必须改变整幅画面的地平线与构图方向，不得只对主体局部做二维倾斜。"
+    ],
+    "forbiddenShortcuts": [
+      "不得把任务执行成只修改关注对象而保留源图背景构图；这种结果视为失败。",
+      "不得对源图做二维旋转、镜像、卡片翻转、透视拉伸、剪贴或边缘扩图来伪装新机位。",
+      "不得复制姿态引导图的卡片、边框、底色、坐标轴、旋转环或预览外观。"
+    ],
+    "deterministicPromptZh": "【相机直绘｜中文】\n相机直绘版本：10.6｜画面侧主指令、反镜头跟随与整场景新视锥重拍\n任务类型：相机轨道重拍（camera-orbit recapture）。场景中的人物、物品、建筑与环境属于同一个三维世界；改变的是观察相机，不是把某个对象从原背景中抠出后原地转动。\n执行顺序：先围绕原图场景中心移动相机，再让镜头看回同一中心，最后从目标新视锥一次性渲染整张新照片；不得先冻结原图，再只修补局部。\n大白话主指令：从原图观看者角度，将镜头转向中心人物/物品在原图画面中的左侧，沿轨道环绕 56.20° 后看回同一场景中心；整幅画面必须随镜头重新成像，不是只让人物或物品转身。自动补全原图不可见的全部部分，包括背景，以及人物、物品或其他对象在新机位下才可见的对称对应结构。这里的“镜像补全”只表示依据真实类别、左右对称关系、三维构造、材质与连接关系推断未拍到或被遮挡的对侧结构，不是整图水平翻转、镜面倒影、复制对象或复制原图像素。\n左右基准（硬约束）：先按原图观看者的屏幕坐标理解左右，再换算被摄对象自身的左右；对象大致正对原相机时，这两套左右正好相反。最终以“原图画面左边/右边”作为不可歧义的相机运动基准。\n原始参数：Pitch X=+7.10°，Yaw Y=+56.20°，Roll Z=-362.00°；YXZ 等效姿态为 X=+7.10°，Y=+56.20°，Z=-2.00°。\n大白话机位：从原图观看者角度，把镜头沿轨道向画面左边移动 56.20°；若对象大致正对原相机，这等于来到对象自身右边；严禁走到画面右边或对象自身左边；把相机抬高到场景中心上方 7.10°，再让镜头轻微向下看回同一中心；这仍属于平视档内的轻微高机位，不要归零或夸大成明显俯拍；Roll 累计控制值 -362.00°，等效为 -2.00°，整幅画框相对原图逆时针滚转 2.00°。目标标签为对象右前方机位（原图观看者左侧轨道）、平视；四元数推导的精确方位角为 +56.20°，精确俯仰角为 +7.10°。镜头始终看回原图中的同一场景中心。\n景别：远景。观察距离控制值：1.5/10。把相机明显向后移，画面关注内容的占比自然减小，并让更多原图外的环境进入画面；这不是把原图内容缩小后贴回固定背景。\n画幅比例：图像 1 的原始宽高比为 1:1，目标输出尺寸为 2048x2048，必须继续保持同一 1:1 比例。不得擅自改成横图或竖图，不得拉伸、压扁、裁成其他比例或添加黑边。\n景深与焦点：以原图为光学基准，识别原图真正清晰的焦点区域、前后景虚化和镜头质感；新机位下按真实拍摄距离自然更新景深，但不要无故把整张图变得全清晰，也不要抹掉原有的自然背景虚化。\n空间：移动相机后重新拍摄完整场景。前景、所有对象、中景、背景、地面、墙面、天花和画面边缘全部按新机位重建透视、尺度、视差、遮挡与构图；不能冻结原背景后只转动其中的人物、物品或局部。\n补全（硬约束）：画面随镜头转动，并必须一起进入目标新视锥。新视锥中原图没有拍到的对象结构和环境区域，也就是目标机位能够看到但原照片未拍到、被遮挡，或因新机位、新景别与新构图而首次进入画面的内容，都必须由模型补全：既包括新显露的对象真实结构，也包括新进入画幅的背景、地面、墙面、建筑、家具及其他环境范围。依据原图的空间关系、环境风格、材质、光线与色彩合理想象并自然补全；对象结构还必须服从已识别类别、真实构造与连接关系。不得用裁切、额外遮挡、模糊、空白、复制边缘或冻结背景逃避补全。新机位看不到的原有内容可以自然出画。\n连续性：保持原图中的对象身份与结构、同一现实瞬间、环境关系、材质、颜色、光线和整体风格，但不要沿用原图的二维投影、遮挡顺序或背景排布。\n视角验收：右前三分之四验收：镜头从原图观看者左边绕过去，来到对象自身右前方；不得生成观看者右边或对象自身左前方的相反视图。原来朝向镜头的投影要自然收窄，环境各深度层向正确方向产生视差。最终屏幕投影验收：镜头向原图画面左边绕行后，近层必须相对远层向最终画面右边产生视差偏移，原图中朝向零度相机的前向深度轴也必须投向最终画面右边。对象大致正对原相机时，对象自身右边的新显露近侧结构应落在最终画面左侧轮廓，而前向突出结构应延伸到最终画面右侧；“对象自身右边”绝不等于“最终画面右边”。若近层或前向结构反向投影，则说明相机实际走到了相反侧，必须判定失败并重建。仍在平视档，但必须保留精确 +7.10° 的轻微高机位和轻微向下观察；不得把角度归零，也不得夸大成明显俯拍。远景要让相机真实后退并看到更多环境，不是把原图缩小后留边。\n禁止：整图水平翻转、镜面倒影、复制人物或物品、二维旋转、卡片翻转、透视拉伸、剪贴、普通扩图，以及只改变单个对象角度而不重建整幅场景。",
+    "deterministicPromptEn": "[Direct camera recapture | English]\nCamera recapture protocol: 10.6 | source-frame-side directive, anti-camera-tracking, and whole-scene view-frustum recapture\nTask type: camera-orbit recapture. The people, objects, architecture, and environment belong to one 3D world. Change the viewing camera; do not cut out and rotate one element inside a frozen source background.\nExecution order: first orbit the camera around the source scene center, then aim the lens back at that same center, and finally render one complete new photograph through the target view frustum. Do not freeze the source image and patch only a local region.\nPlain-language primary instruction: from the source viewer's perspective, move the camera toward the LEFT side of the central person or object as located in the source frame, orbit 56.20 degrees, and look back toward the same scene center. The whole image must be recaptured with the moving camera; do not merely turn a person or object. Automatically complete every part absent from the source image, including the background and the symmetric counterpart structures of people, objects, or other depicted elements that become visible only from the new camera position. “Symmetric counterpart completion” means inferring occluded opposite-side structure from the real category, bilateral symmetry, 3D construction, material, and connection logic; it never means horizontally flipping the complete image, creating a mirror reflection, duplicating an object, or copying source pixels.\nLeft/right reference (hard constraint): interpret left and right first in the source viewer's screen coordinates, then translate them into the depicted object's own coordinates. For an object approximately facing the source camera, these two left/right systems are opposite. The source frame's left or right edge is the unambiguous camera-motion reference.\nRaw controls: Pitch X=+7.10 degrees, Yaw Y=+56.20 degrees, Roll Z=-362.00 degrees. The equivalent YXZ pose is X=+7.10 degrees, Y=+56.20 degrees, Z=-2.00 degrees.\nPlain-language camera position: from the source viewer's perspective, orbit the camera 56.20 degrees toward the LEFT edge of the source frame; for an object approximately facing the source camera, this places the camera on the object's own RIGHT; do not move toward the source frame's right edge or the object's own left; raise the camera 7.10 degrees above the scene center and look slightly downward toward that same center; this remains a subtle elevated position within the eye-level band, so do not round it to zero or exaggerate it into an obvious high-angle shot; the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source. Target label: object-right-front three-quarter view on the source viewer's left orbit, eye level. Quaternion-derived azimuth is +56.20 degrees and elevation is +7.10 degrees. Keep the lens aimed at the same scene center as in the source image.\nShot size: wide shot. Camera-distance control: 1.5/10. Move the camera clearly backward so the depicted focus occupies less of the frame and more previously unseen environment enters the image. Do not merely shrink the source subject inside a frozen background.\nFrame and aspect ratio: image 1 has a source aspect ratio of 1:1; render exactly 2048x2048 with the same 1:1 ratio. Do not change it into a landscape or portrait canvas, stretch it, squash it, crop it to another ratio, or add letterboxing.\nDepth of field and focus: use the source image as the optical reference. Identify its true focal plane, sharp region, foreground/background blur, and lens character. Update depth of field naturally for the new camera distance, but do not make the entire image uniformly sharp or erase the source's natural background separation.\nSpace: move the camera and recapture the complete scene. Rebuild the perspective, scale, parallax, occlusion, and composition of the foreground, every object, midground, background, ground, walls, ceiling, and frame edges from the new camera position. Do not freeze the source background and rotate only a person, object, or local region.\nCompletion (hard constraint): the whole image moves with the camera and must enter the target view frustum. Infer and naturally complete every object structure and environment region that enters the new view frustum but was not captured in the source. This includes everything absent from the source photograph, previously occluded, or newly entering the frame because of the target camera position, shot size, and composition: both newly revealed real object structures and newly framed background, ground, walls, architecture, furniture, and other environment areas. Infer them conservatively from the source spatial relationships, environment style, materials, lighting, and colors; object structures must also follow the detected category, real construction, and connection logic. Do not evade completion with cropping, extra occluders, blur, blank areas, duplicated edges, or a frozen source background. Source content outside the target view may naturally leave the frame.\nContinuity: retain the identities and structures of the depicted elements, the same real-world moment, environment relationships, materials, colors, lighting, and overall style. Recompute the 2D projection, occlusion order, and background layout from the target camera instead of reusing those from the source image.\nAcceptance: For the object-right-front three-quarter view, orbit toward the LEFT edge of the source frame and arrive on the object's own right-front side. Do not produce the opposite source-frame-right or object-left-front view. Source-facing projections must narrow naturally and every depth layer must show parallax in the correct direction. Final screen-projection audit: after the camera orbits toward the LEFT edge of the source frame, near depth layers must shift toward the RIGHT side of the final image relative to far layers, and the source-facing forward depth axis must also project toward the final image's RIGHT. When the depicted object approximately faces the source camera, newly revealed near structures on the object's own right belong on the LEFT contour of the final image, while forward-projecting structures extend toward the final image's RIGHT. The object's own right never means the final image's right. If these projections reverse, the camera reached the opposite side; reject and rebuild. This remains in the eye-level band, but preserve the exact +7.10 degrees subtle elevated camera position and slight downward look. Do not round it to zero or exaggerate it into an obvious high-angle shot. For the wide shot, physically move the camera back and reveal more environment; do not merely shrink the source image and add borders.\nReject: horizontally flipping the complete image, creating a mirror reflection, duplicating a person or object, 2D rotation, card flipping, perspective warping, cut-and-paste, ordinary outpainting, or changing only one object's angle without rebuilding the complete scene."
+  },
+  "renderPrompt": "【唯一最高优先级任务｜相机新视角重拍】\n相机直绘版本：10.6｜画面侧主指令、反镜头跟随与整场景新视锥重拍\n核心口令：将镜头转向中心人物/物品的左侧，自动补全原图不可见的部分，包括背景、人物的镜像、物品的镜像。\n精确定义：这里的左侧以原图观看者的画面方向为准；相机沿该侧轨道环绕 56.20° 后看回同一场景中心。整幅画面随镜头转动并重新成像；不是只让人物或物品转身。\n左右锁定：镜头位于原图画面左侧，若中心对象大致正对原相机，则相机位于对象自身右侧；最终二维朝向、轮廓和遮挡只由这个新机位决定。\n反镜头跟随：场景中的人物、动物、可动部件或物品不能为了继续正对新镜头而做补偿性转动。延续同一现实瞬间和世界空间关系，但最终二维画面中的朝向、轮廓、投影宽度与遮挡必须随相机相对位置改变。\n相机参数：相机抬高 7.10° 并向下看回中心；Roll -2.00°；远景；保持图像 1 的 1:1 宽高比，最终输出 2048x2048。\n输入：第一张图是画面元素与完整环境的事实参考；第二张图是干净的旋转目标投影图，用于确认透视缩短、Roll、构图和景别；第三张图是完整 XYZ 机位图，用于确认相机所在一侧、环绕轨道、镜头朝向、Pitch、Yaw 与 Roll。不要照抄引导图中的卡片、坐标轴、旋转环、边框、底色、标签或预览外观。\n【gpt-5.6-sol 类别闸门｜不输出自由机位描述】\n识别类别：人物。\n身份或型号、真实构造、材质、颜色、光线、景深与画风直接以图像 1 为准；不得把源图二维脸部/物体投影、源图轮廓或源图遮挡顺序当作相机指引继续沿用。\n【人物专用最终屏幕方向判据】\n目标相机位于人物自身右边。人物自身右耳、右侧发际和右颊属于近侧，必须构成最终画面左侧轮廓，并比图像 1 更明显；人物自身左耳属于远侧，必须在最终画面右侧退隐。\n人物不追随环绕相机转动头部或躯干来重新正对新镜头；延续同一世界空间瞬间，只由目标相机重新投影。\n鼻尖和面部前向轴必须指向最终画面右边，远侧左眼与左颊必须在鼻梁后方收窄。人物自身右边不等于最终画面右边。\n失败判据：若最终图仍像图像 1 一样在画面右侧清楚显示人物自身左耳，或鼻尖仍指向画面左边，则视角左右反了；必须放弃源图脸部投影并重新生成。\n执行：把虚拟相机真实移动到锁定的轨道机位，通过新视锥重拍完整且固定的三维场景。前景、中心对象、环境、背景、地面和画面边缘必须一起更新透视、视差、尺度、遮挡和构图。\n不可见区域补全（必须执行）：补全目标机位可见、但图像 1 未拍到或被遮挡的全部范围，包括背景，以及人物、物品或其他对象在新机位下才显露的对称对应结构。用户所说的“人物的镜像、物品的镜像”专指依据真实类别和原图证据进行三维对侧补全，不是整图水平翻转、镜面倒影、复制对象或复制原图像素。\n补充要求：延续同一现实瞬间的场景内容、空间关系、材质、光线、色彩和风格，不增加无关概念。\n失败判据：若结果仍接近原图正面、背景仍冻结在原构图，或只有局部对象发生转向，则说明没有执行相机移动，必须重建。\n输出：只输出一张从指定相机机位拍摄的干净、高保真图片，不显示坐标轴、旋转环、辅助线、字幕或水印。",
+  "promptLanguage": "zh",
+  "outputSize": "2048x2048",
+  "subjectCategory": "person",
+  "optimizedPrompt": "写实自然光人像，同一位年轻东亚女性，灰褐色眼睛，黑褐色头发盘成松散发髻，额前与颈侧有细碎发丝，肤色白皙细腻，淡粉唇，穿白色薄纹理方领上衣。保持真实面部比例与安静自然的神情；补全发髻、耳廓、颈肩及衣料连接。室内窗边柔光，左侧冷白窗区，后方米灰墙与暖棕家具，浅景深、柔和奶油散景、细腻摄影质感。",
+  "viewDescription": "写实自然光人像，同一位年轻东亚女性，灰褐色眼睛，黑褐色头发盘成松散发髻，额前与颈侧有细碎发丝，肤色白皙细腻，淡粉唇，穿白色薄纹理方领上衣。保持真实面部比例与安静自然的神情；补全发髻、耳廓、颈肩及衣料连接。室内窗边柔光，左侧冷白窗区，后方米灰墙与暖棕家具，浅景深、柔和奶油散景、细腻摄影质感。",
+  "sourceViewDescription": "年轻东亚女性近乎正对原相机，头略偏向原图观看者左侧；其自身左耳位于屏幕右侧且清晰，自身右耳位于屏幕左侧并被头发遮住。",
+  "targetViewDescription": "对象右前方机位（原图观看者左侧轨道）、平视、远景，Roll 累计控制值 -362.00°，等效为 -2.00°，整幅画框相对原图逆时针滚转 2.00°",
+  "relativeCameraMotion": "相机从原图零度基准移动到服务端锁定姿态，整幅场景通过新的目标视锥重新投影。",
+  "visibilityConstraints": [
+    "新投影会更多显露人物自身右侧、即原图屏幕左侧的太阳穴、颧部、下颌缘和颈肩连接，轮廓应保持自然连续。",
+    "人物自身左侧、即原图屏幕右侧的脸颊与耳廓会缩短并更多重叠于面部轮廓，左耳可见面积减少。",
+    "鼻梁与鼻尖会更明显地重叠人物自身左侧脸颊，远侧眼睛横向缩短，但双眼身份特征和灰褐色虹膜不变。",
+    "松散发髻、额前碎发、颈侧发丝和白色上衣领口均须保持原有结构、颜色与轻薄纹理。"
+  ],
+  "occlusionConstraints": [
+    "人物自身左耳、即原图屏幕右侧耳朵会被左侧脸部轮廓及鬓发部分遮挡，不再保持源图的完整显露。",
+    "人物自身右耳、即原图屏幕左侧耳朵可能从深色侧发后首次局部显露，但仍应有鬓发覆盖。",
+    "远侧眼角与眉尾会受鼻梁和面部转折的透视重叠影响，不得错误消失或移位。",
+    "发髻后部与颈后轮廓会互相重叠，零散发丝应贴合真实生长与垂落关系。"
+  ],
+  "identityConstraints": [
+    "保持同一位年轻东亚女性的椭圆脸、柔和下颌、小巧鼻形、灰褐色眼睛、自然平眉与淡粉饱满嘴唇。",
+    "保持黑褐色松散高发髻、中央附近分缝、细碎额发和颈侧散发，不增加饰品或刘海造型。",
+    "保持白皙自然肌肤、极淡妆容、柔和橙棕眼影与真实皮肤细节，避免塑料感和过度磨皮。",
+    "保持白色薄棉麻质感方领上衣、细微织纹和轻柔褶皱，画面中无文字、标志或首饰。"
+  ],
+  "hiddenSurfacePlan": [
+    "保守补全人物自身右耳的耳轮、耳甲与耳垂，仅局部露出并沿太阳穴鬓发自然连接，不添加耳饰。",
+    "补全人物自身右侧后脑与发髻基部，以同色黑褐发束盘绕并延续源图松散、略有飞发的结构。",
+    "补全人物自身右侧颈部、斜方肌与肩线，使其按真实人体结构连接下颌和锁骨。",
+    "补全白色上衣在人物自身右肩及背侧的布料，延续薄织纹、柔软褶皱与方领接缝。"
+  ],
+  "scenePlan": [
+    "前景保持干净，仅有柔和窗光形成的轻微空气感，不增加道具或遮挡物。",
+    "中景为人物头部、颈肩与白色上衣，面部和近侧眼睛是清晰焦点，发髻与衣料细节略柔。",
+    "背景延续原图屏幕左侧冷白窗框与灰色竖向边界、屏幕右侧米灰墙和暖棕家具，保持明显虚化。",
+    "补全源图范围外环境为空间连续的窗边室内：窗墙交界、米灰墙面、暖棕木质家具与柔暗下部区域自然延展，不复制边缘或留空。"
+  ],
+  "uncertaintyNotes": [
+    "图像未显示人物自身右耳和后脑完整形态，相关结构应按常见人体比例及现有发际线保守推断。",
+    "背景家具仅呈暖棕色模糊块面，具体品类与细节不可确定，应保持无文字、低细节散景。"
+  ],
+  "reasoningModel": "gpt-5.6-sol",
+  "imageModel": "gpt-image-2",
+  "reasoningDurationMs": 18,
+  "renderingDurationMs": 121363,
+  "totalDurationMs": 121398
+}

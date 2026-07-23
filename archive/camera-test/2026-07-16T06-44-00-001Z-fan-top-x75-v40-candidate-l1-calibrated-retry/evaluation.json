@@ -1,0 +1,18 @@
+{
+  "status": "near-pass",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.28,
+    "subjectHeightRatioApprox": 0.44,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": false,
+    "identityGeometryPass": true
+  },
+  "reason": "The camera projection and identity passed, but the subject landed approximately one percentage point below the 45% medium-shot threshold."
+}

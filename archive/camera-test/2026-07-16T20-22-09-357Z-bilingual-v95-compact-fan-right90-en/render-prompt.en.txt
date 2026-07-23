@@ -1,0 +1,47 @@
+[Direct camera recapture | English]
+Camera recapture protocol: 9.4 | move the camera and recapture the entire scene
+Task type: camera-orbit recapture. The people, objects, architecture, and environment belong to one 3D world. Change the viewing camera; do not cut out and rotate one element inside a frozen source background.
+Execution order: first orbit the camera around the source scene center, then aim the lens back at that same center, and finally render one complete new photograph through the target view frustum. Do not freeze the source image and patch only a local region.
+Shot size: medium shot.
+Camera: orbit 90.00 degrees to the right from the source camera position, eye level, roll 0 degrees with the source horizon as the zero-roll reference; target view is strict right-side view, eye level, azimuth +90.00 degrees, elevation 0.00 degrees. Keep the lens aimed at the same scene center as in the source image.
+Space: move the camera and recapture the complete scene. Rebuild the perspective, scale, parallax, occlusion, and composition of the foreground, every object, midground, background, ground, walls, ceiling, and frame edges from the new camera position. Do not freeze the source background and rotate only a person, object, or local region.
+Completion: the image moves with the camera. Infer and naturally complete every object structure and environment region that enters the new view frustum but was not captured in the source, using the source spatial relationships, environment style, materials, lighting, and colors. Content outside the new view may leave the frame.
+Continuity: retain the identities and structures of the depicted elements, the same real-world moment, environment relationships, materials, colors, lighting, and overall style. Recompute the 2D projection, occlusion order, and background layout from the target camera instead of reusing those from the source image.
+Acceptance: This must be a strict 90-degree right-side camera view: place the camera directly to the right of the scene center and look back toward that center. Any large projection that faced the source camera must become a visibly narrow edge projection, newly visible rightward depth must enter the frame, and the background must show matching lateral parallax. Every source-facing disk, panel, screen, door, grille, frame, or other broad plane must become a clearly narrow edge projection. If any of them still broadly faces the camera, the camera has not reached the 90-degree side position and the view must be rebuilt. Use natural eye-level perspective without adding an unrequested high-angle or low-angle effect. For the medium shot, keep the scene focus and surrounding environment readable while preserving real spatial depth.
+Reject: mirroring, 2D rotation, card flipping, perspective warping, cut-and-paste, ordinary outpainting, or changing only one object's angle without rebuilding the complete scene.
+Inputs: image 1 is the factual reference for the depicted elements and complete environment. Image 2 is the rotated target-camera guide and only indicates camera direction, roll, composition, and shot size; do not copy its card, border, background color, or preview appearance.
+[gpt-5.6-sol visual facts | subordinate to the locked camera block]
+Detected category: product or object.
+Identity, structure, material, lighting, and style facts:
+- A compact white tabletop electric fan stands on a pale wood table. Its circular grille reads as a narrow vertical profile, with front and rear grille rims, blade layer, central hub, and rear housing forming tight stacked edges. A short cylindrical stem joins a low oval base with a small top control. Use matte and semi-gloss white plastic. The bright warm-white kitchen contains a fruit plate, iced water glass, magazine, pale wood cabinets, white appliances, shelf, plants, window, and refrigerator, with soft daylight and realistic product-photography rendering.
+- Keep the subject a plain white compact tabletop fan with no added brand, text, or colored decoration.
+- Preserve the dense curved radial grille, round central cap, short cylindrical stem, and low oval base.
+- Maintain clean matte and semi-gloss plastic with soft highlights.
+- Retain bright warm-white daylight, low-contrast shadows, and realistic domestic product photography.
+Conservative completion plan for newly visible structures:
+- Complete the real blade thickness, rear grille layer, and motor-housing outline behind the visible grille.
+- Complete the connecting neck between the fan head and stem without adding an unverified complex hinge.
+- Complete the base top hidden by the stem and its continuous rounded edge.
+- Use matching white plastic for unseen connectors and keep the construction simple.
+Complete environment continuity plan:
+- Extend the pale wood tabletop in the foreground, retaining the fruit plate, iced water glass, and magazine at the edge.
+- Keep the fan and rear kitchen counter in the middle layer, including the pot, toaster oven, kettle, cutting board, and leafy vase.
+- Continue the pale tiled wall, wood shelf with jars, pale wood cabinets, bright window, and white refrigerator in the background.
+- Fill uncovered areas with the same kitchen wall, counter surfaces, and natural illumination without introducing conspicuous new objects.
+Category-specific projection evidence:
+- The circular grille and radial spokes shorten and overlap into a narrow vertical profile.
+- The front and rear grille rims and rear housing depth appear as layered edges.
+- The blades and central hub largely occlude one another, leaving thin layered outlines.
+- The short stem, oval base, and small control on the base top remain identifiable.
+Category-specific occlusion evidence:
+- The front and rear grille spokes strongly overlap and must not form a complete radial circle.
+- The central cap blocks the axle area and overlaps the outline of the rear motor housing.
+- The blades are mostly hidden by the grille rims and central assembly.
+- The stem partially overlaps the lower edge of the fan head, while the main base remains unobscured.
+Uncertain details must use the most conservative completion:
+- The rear motor housing is only partly evidenced along the grille edge, so its seams should remain simplified.
+- The stem joint and back of the base lack clear evidence; do not invent ports, labels, or text.
+These visual facts may not redefine the camera, shot size, roll, framing, or target projection.
+Execution: move the virtual camera to the locked orbit position, then recapture the entire scene through the new view frustum. Treat image 1 as scene evidence, not as a frozen background. Reproject every depicted element and the environment from the new camera position.
+Additional requirement: Continue the same real-world moment, spatial relationships, materials, lighting, colors, and visual style without adding unrelated concepts.
+Output: return one clean, high-fidelity image photographed from the specified camera position. Do not show axes, rotation rings, guides, captions, or watermarks.

@@ -1,0 +1,35 @@
+{
+  "requestId": "96528dfd-2ba9-47bb-8824-5b2a8d5ed475",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2182836,
+    "sha256": "87b6ef7e93adacecd006fc460bb9a1783549a7a968eda06a4d7c86cccde8cd00"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 671104,
+    "sha256": "4b041f2a9d47a473980cd77cae179384364302f8820a5c381553733de76a020c"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 750500,
+    "sha256": "27d723f8df90ce903cfeaeb3ec14f131afb60aeb9495f1a949071d39973ca6c1"
+  },
+  "rotation_degrees": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "camera_distance": 5,
+  "user_prompt": "目标相机保持零度正前方平视中景，并作为最终屏幕投影的唯一来源。保持同一风扇身份、装配、材质、光线与厨房场景事实；从正前方重新成像为真实正视投影，圆形网罩、中心盖、支柱和底座按正面同轴关系呈现，背景按正前方机位重新建立视差。",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "1024x1024",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "L:\\AIProject\\api2Image\\.artifacts\\single-image-viewpoint-live\\2026-07-16-fan-side-right-90-v39\\source.png"
+}

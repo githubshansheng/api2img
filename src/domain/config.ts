@@ -3,6 +3,8 @@ import type { ModelConfig } from "./model";
 
 export type FeatureFlags = {
   enableImageEditingWorkbench: boolean;
+  enableVector3DViewpoint: boolean;
+  enableCanvasOutpaint: boolean;
   enableBatch: boolean;
   enableCompare: boolean;
   enableHistory: boolean;

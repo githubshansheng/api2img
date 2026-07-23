@@ -1,0 +1,43 @@
+{
+  "subjectCategory": "person",
+  "optimizedPrompt": "Photorealistic indoor portrait of the same young East Asian woman, preserving her oval face, gray-brown eyes, natural makeup, soft pink lips, dark-brown high bun with wisps, and white lightweight woven blouse. Naturally reveal her own right ear, right cheek contour, and right shoulder; let the nose and facial contour partly occlude her left ear and cheek. Maintain soft window light, shallow depth of field, warm-gray interior, wooden background, and conservatively complete the torso, wall, window area, and plain floor.",
+  "viewDescription": "Photorealistic indoor portrait of the same young East Asian woman, preserving her oval face, gray-brown eyes, natural makeup, soft pink lips, dark-brown high bun with wisps, and white lightweight woven blouse. Naturally reveal her own right ear, right cheek contour, and right shoulder; let the nose and facial contour partly occlude her left ear and cheek. Maintain soft window light, shallow depth of field, warm-gray interior, wooden background, and conservatively complete the torso, wall, window area, and plain floor.",
+  "sourceViewDescription": "Image 1 is a square close photorealistic portrait; the young woman faces the original camera approximately frontally, her own left ear is clearly visible on the original viewer’s right, and the dark-brown bun, white lightweight blouse, and soft window light are defining features.",
+  "targetViewDescription": "object-right-front three-quarter view on the source viewer's left orbit, eye level, wide shot, the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "The original viewer’s left corresponds to the woman’s own right, so her right cheek contour, right ear, and right hairline become more visible than in the source.",
+    "Her own left eye, left cheek, and left ear are foreshortened and overlap more, reducing the prominence of the left ear seen on the original viewer’s right.",
+    "The nasal bridge and tip partly occlude her own left facial area, while both eyes retain the same gray-brown irises, shapes, and spacing.",
+    "The bun, jaw, neck, and collarbones remain continuously connected, with unchanged proportions in the white neckline and shoulders."
+  ],
+  "occlusionConstraints": [
+    "Her own left ear becomes more concealed by the left temple hair and facial contour and should not remain as fully visible as in the source.",
+    "Her own right ear, previously hidden by hair and the head, should emerge naturally behind the right-side strands.",
+    "The nasal bridge overlaps a small portion of her own left inner eye area and cheek, avoiding a flat duplication of both facial halves.",
+    "Her own right shoulder-to-neck connection becomes clearer, while the left shoulder overlaps more strongly with the chest and neck contour."
+  ],
+  "identityConstraints": [
+    "Preserve the same young woman’s oval face, fine straight brows, gray-brown eyes, soft pink lips, smooth light-warm skin, and natural makeup.",
+    "Preserve the dark brown-black hair, high loose bun, slightly off-center part, and fine wisps along both cheeks.",
+    "Preserve the white semi-sheer lightweight woven blouse, wide round neckline, and subtle folds, adding no jewelry, text, or patterns.",
+    "Maintain soft photorealistic photography, fine skin and hair detail, and the same age, build, expression, and gentle demeanor."
+  ],
+  "hiddenSurfacePlan": [
+    "Complete her own right ear with a natural helix, lobe, and connections to the temple and hairline, informed by the visible left ear without mechanical mirroring.",
+    "Complete her own right rear head and bun base, continuing the dark-brown strand wrapping, loose flyaways, and natural highlights.",
+    "Complete her own right neck, trapezius, collarbone, and shoulder connections according to her slender build and existing skin shading.",
+    "Complete the blouse and torso below the source boundary, continuing the fine woven texture, loose cut, and soft folds."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean without new occluders; the midground focus remains the face, bun, neck, shoulders, and completed blouse-covered torso.",
+    "Extend the bright window frame and pale wall on the original viewer’s left into newly visible space while preserving soft cool-white diffused light.",
+    "Continue the warm-gray wall, wooden furniture or panel, and darker defocused background, connecting new areas through the existing spatial layers rather than copied edges.",
+    "Complete a plain neutral indoor floor and wall-floor junction below, preserving shallow depth of field, creamy bokeh, and natural portrait-lens rendering."
+  ],
+  "uncertaintyNotes": [
+    "Her own right ear, full torso, and floor are absent from the source and require conservative completion from anatomy and existing materials.",
+    "The complete form of the background furniture is uncertain; only the warm wood, gray wall, and indoor blur relationships should continue.",
+    "No identifiable text, logo, jewelry, or handheld object is present and none should be invented."
+  ]
+}

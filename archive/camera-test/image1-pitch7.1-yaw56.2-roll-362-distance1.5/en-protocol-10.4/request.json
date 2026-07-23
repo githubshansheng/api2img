@@ -1,0 +1,38 @@
+{
+  "requestId": "d0fa70f3-b01b-4558-98f3-e4e599a072ea",
+  "source_image": {
+    "mediaType": "image/png",
+    "base64Length": 2387000,
+    "sha256": "5c2209c61e226801c50a766adfbee4ebbee81fe9340c3d6b8dd90d8412d3ee2b"
+  },
+  "pose_guide_image": {
+    "mediaType": "image/png",
+    "base64Length": 1674788,
+    "sha256": "412e12959e8ff18a019c9b581522fa117341a36b13e3d2888cc90be2fc414d5e"
+  },
+  "camera_pose_image": {
+    "mediaType": "image/png",
+    "base64Length": 1794748,
+    "sha256": "27444052ba00f6b67f4ba751da9485740ad1c5b8a2ecd4b34897c72bb34a3f8c"
+  },
+  "rotation_degrees": {
+    "x": 7.1,
+    "y": 56.2,
+    "z": -362
+  },
+  "camera_distance": 1.5,
+  "source_width": 1254,
+  "source_height": 1254,
+  "prompt_language": "en",
+  "user_prompt": "Continue the same real-world moment, spatial relationships, materials, lighting, colors, and visual style without adding unrelated concepts.",
+  "background_mode": "preserve_scene",
+  "api_key": "[redacted:51]",
+  "reasoning_model": "gpt-5.6-sol",
+  "image_model": "gpt-image-2",
+  "output_size": "2048x2048",
+  "endpoint_override": {
+    "baseURL": "https://ai.heigh.vip",
+    "editURL": "https://ai.heigh.vip"
+  },
+  "source_path": "C:\\Users\\Administrator\\.codex\\attachments\\45065645-f257-4c64-8c4a-5556912d51ac\\image-1.png"
+}

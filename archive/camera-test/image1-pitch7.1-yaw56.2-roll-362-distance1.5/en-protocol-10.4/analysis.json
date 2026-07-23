@@ -1,0 +1,42 @@
+{
+  "subjectCategory": "person",
+  "optimizedPrompt": "Redraw the same young East Asian woman with an oval face, fine straight brows, gray-brown eyes, natural pink lips, fair refined skin, and dark brown-black hair in a loose high bun with wisps at the temples and neck. Keep her white lightweight textured square-neck blouse, soft window daylight, shallow depth of field, and realistic portrait finish. Preserve accurate facial, ear, bun, neck, and shoulder visibility and occlusion, while naturally extending the gray-white window wall and warm brown interior background.",
+  "viewDescription": "Redraw the same young East Asian woman with an oval face, fine straight brows, gray-brown eyes, natural pink lips, fair refined skin, and dark brown-black hair in a loose high bun with wisps at the temples and neck. Keep her white lightweight textured square-neck blouse, soft window daylight, shallow depth of field, and realistic portrait finish. Preserve accurate facial, ear, bun, neck, and shoulder visibility and occlusion, while naturally extending the gray-white window wall and warm brown interior background.",
+  "sourceViewDescription": "Image 1 is a near-frontal indoor portrait of a young East Asian woman with a slight head turn; her own left ear appears on the viewer's screen right, with a dark loose bun, white textured blouse, soft window light from the left, and a warm brown blurred background.",
+  "targetViewDescription": "object-right-front three-quarter view on the source viewer's left orbit, eye level, wide shot, the cumulative roll control is -362.00 degrees, equivalent to -2.00 degrees, rotating the complete camera frame counterclockwise by 2.00 degrees relative to the source",
+  "relativeCameraMotion": "The camera moves from the source zero-degree reference to the server-locked target pose, and the complete scene is reprojected through the new view frustum.",
+  "visibilityConstraints": [
+    "The subject's own right brow, eye, cheekbone, cheek, and jaw become more visible, corresponding to the viewer's screen-left region in the source; her own left facial features become horizontally foreshortened.",
+    "The subject's own right ear and right temple hair become newly visible, while her own left ear becomes less visible through overlap from the nose, left cheek, and hair strands.",
+    "The nose bridge and tip overlap more of the subject's own left cheek, and the apparent eye spacing shortens while eye color, shape, and gaze characteristics remain consistent.",
+    "The bun, neck, and both shoulders retain anatomical continuity, while the white neckline and collarbone area show natural volume-based foreshortening and overlap."
+  ],
+  "occlusionConstraints": [
+    "The nose occludes the subject's own left inner eye corner and part of the cheek; the far facial features must remain structurally attached.",
+    "The subject's own left ear is partly hidden by the left cheek contour, temple hair, and rear hair mass, while her own right ear must not be completely covered without evidence.",
+    "The subject's own left shoulder and neckline become farther and are partly overlapped by the neck and torso, while her own right shoulder contour remains more complete.",
+    "Front and rear strands of the loose bun must occlude one another naturally, with wisps growing only from plausible hairline, ear, and neck regions."
+  ],
+  "identityConstraints": [
+    "Preserve the same young East Asian woman with an oval face, soft jawline, fine straight brows, gray-brown irises, petite nose, and natural pink lips.",
+    "Preserve dark brown-black hair, the loose high bun, slightly off-center hairline, and fine flyaways without changing hair volume or texture.",
+    "Preserve fair natural skin, subtle warm makeup, and the absence of jewelry; add no text, logos, or accessories.",
+    "Preserve the white lightweight blouse with a faint grid texture, broad square neckline, and soft folded fabric."
+  ],
+  "hiddenSurfacePlan": [
+    "Conservatively complete the subject's own right ear with size, skin tone, and auricular structure consistent with the visible left ear, naturally joined to the right temple and rear jaw.",
+    "Complete the subject's own right temple, hairline, zygomatic contour, and jaw turn using the existing facial proportions and refined skin texture, without adding marks or makeup.",
+    "Complete the right-rear bun and back-of-head strands as dark brown-black hair winding into the existing high bun, retaining its loose volume rather than introducing an ornamental shape.",
+    "Complete the right neck, shoulder, collarbone, and unseen blouse sections with continuous anatomy and matching neckline, sleeve-shoulder construction, and fabric."
+  ],
+  "scenePlan": [
+    "Keep the foreground clean with no new obstructions; focus remains on the eyes, nose, lips, and nearer cheek, while fine hair and fabric are slightly softer.",
+    "The midground contains continuous hair, neck, shoulders, and white blouse; cool white window light creates soft highlights, with warm gentle shadow toward the room.",
+    "Extend the gray-white window frame or wall and the warm brown furniture and wall layers from the source, retaining pronounced blur and soft bokeh.",
+    "Fill newly included room areas with consistent gray-white architectural surfaces, warm brown furniture edges, and neutral walls; do not freeze edges or leave blanks, and preserve the 1:1 aspect ratio."
+  ],
+  "uncertaintyNotes": [
+    "The right ear, right hairline, and rear bun are not visible in Image 1, so their forms are conservatively inferred from the visible opposite structures and hairstyle.",
+    "The exact background furniture type and boundaries are unclear because of shallow depth of field; only the warm brown masses, gray wall, and window relationship are reliable."
+  ]
+}

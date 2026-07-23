@@ -17,9 +17,11 @@ import {
   Images,
   Maximize2,
   Minus,
+  Orbit,
   Plus,
   RotateCcw,
   Save,
+  ScanLine,
   Settings,
   Sparkles,
   TestTube2,
@@ -31,6 +33,9 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipb
 import { createDefaultGenerationParams, resolveModelCapabilities } from "./domain";
 import { GenerationSuiteWorkbench } from "./components/generation-suite/GenerationSuiteWorkbench";
 import { ImageEditingWorkbench } from "./components/image-editing/ImageEditingWorkbench";
+import { CanvasOutpaintWorkbench } from "./components/canvas-outpaint/CanvasOutpaintWorkbench";
+import { Vector3DViewpointWorkbench } from "./components/vector3d/Vector3DViewpointWorkbench";
+import { DebugLogPanel } from "./components/debug/DebugLogPanel";
 import type {
   ApiError,
   CreateGenerationResponse,
@@ -167,6 +172,8 @@ import {
 const icons: Record<PageKey, React.ComponentType<{ size?: number }>> = {
   studio: Sparkles,
   editing: Brush,
+  viewpoint: Orbit,
+  outpaint: ScanLine,
   generation: WandSparkles,
   compare: Compass,
   history: Clock3,
@@ -240,6 +247,16 @@ const pageSummaries: Record<PageKey, { title: string; eyebrow: string; status: s
     title: "修图工作台",
     eyebrow: "连续对话式图像编辑",
     status: "在同一会话中执行整图、局部蒙版和双版本合并编辑，AI 会先润色并校验指令，再生成可检出的候选版本。"
+  },
+  viewpoint: {
+    title: "3D 视角重塑",
+    eyebrow: "单图 Gaussian 代理视角工作台",
+    status: "导入一张图片生成可环绕的 Gaussian 空间代理，捕获新相机视角后由视觉模型与图像模型协作推演隐藏面并重塑细节。"
+  },
+  outpaint: {
+    title: "单图 AI 新视角",
+    eyebrow: "XYZ 相机轨道与整场景新机位重拍",
+    status: "沿 X、Y、Z 轴移动虚拟相机，由 GPT-Image-2 从目标机位重新拍摄整幅固定场景；新视锥中原图未呈现的对象结构与环境区域按原有空间、材质、光线和画风自然补全。"
   },
   generation: {
     title: "生成图片",
@@ -774,6 +791,8 @@ function loadInitialPage(): PageKey {
   const pages: PageKey[] = [
     "studio",
     "editing",
+    "viewpoint",
+    "outpaint",
     "generation",
     "compare",
     "history",
@@ -3126,6 +3145,7 @@ export function App() {
             );
           })}
         </nav>
+        <DebugLogPanel />
       </aside>
 
       <main className="workspace">
@@ -3140,8 +3160,14 @@ export function App() {
 
         <section
           className={`page-surface${activePage === "studio" ? " studio-page-surface" : ""}${
-            activePage === "generation" ? " generation-page-surface" : ""
-          }${activePage === "editing" ? " editing-page-surface" : ""}`}
+            activePage === "generation"
+              ? ` generation-page-surface generation-${generationWorkspaceMode}-page-surface`
+              : ""
+          }${activePage === "editing" ? " editing-page-surface" : ""}${
+            activePage === "viewpoint" ? " viewpoint-page-surface" : ""
+          }${
+            activePage === "outpaint" ? " outpaint-page-surface" : ""
+          }`}
         >
           {activePage !== "studio" && (
             <div className="page-heading">
@@ -3198,6 +3224,32 @@ export function App() {
               params={generationParams}
               selectedModel={selectedModel}
               selectedModelId={selectedModel?.id ?? selectedModelId}
+            />
+          ) : activePage === "viewpoint" ? (
+            <Vector3DViewpointWorkbench
+              endpointOverride={selectedEndpointOverride}
+              models={configuredModels}
+              onOpenSettings={() => {
+                setSettingsActiveTab("api-model");
+                setSettingsModelId(selectedModel?.id ?? selectedModelId);
+                setSettingsOpen(true);
+              }}
+              onSelectModel={setSelectedModelId}
+              selectedModel={selectedModel}
+            />
+          ) : activePage === "outpaint" ? (
+            <CanvasOutpaintWorkbench
+              apiKey={selectedApiKey}
+              defaultBaseURL={
+                selectedEndpointOverride?.baseURL ?? selectedModel?.baseURL
+              }
+              defaultEditURL={
+                selectedEndpointOverride?.editURL ?? selectedModel?.editURL
+              }
+              onOpenSettings={() => {
+                setSettingsModelId(selectedModel?.id ?? selectedModelId);
+                setSettingsOpen(true);
+              }}
             />
           ) : activePage === "history" ? (
             <section className="history-view" aria-label="历史记录列表">

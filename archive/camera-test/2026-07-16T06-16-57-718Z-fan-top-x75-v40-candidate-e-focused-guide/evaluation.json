@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "cameraTarget": {
+    "azimuthDegrees": 0,
+    "elevationDegrees": 75,
+    "rollDegrees": 0,
+    "shot": "medium"
+  },
+  "observations": {
+    "grilleMinorMajorRatioApprox": 0.27,
+    "subjectHeightRatioApprox": 0.38,
+    "fanHeadFacesCamera": false,
+    "cameraProjectionPass": true,
+    "compositionPass": false,
+    "identityGeometryPass": false
+  },
+  "reason": "The focused guide preserved the high-camera projection, but the subject remained below the required 45%-55% height and the support/base geometry drifted."
+}
